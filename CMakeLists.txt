@@ -4,7 +4,7 @@ project(prog4)
 
 set ( CMAKE_MODULE_PATH /usr/share/apps/cmake/modules )
 
-set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -fomit-frame-pointer -fno-exceptions -fPIC -Woverloaded-virtual -Wcast-qual" )
+set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3 -fomit-frame-pointer -fno-exceptions -fPIC -Woverloaded-virtual -Wcast-qual -std=gnu++11" )
 
 find_package(LLVM)
 
