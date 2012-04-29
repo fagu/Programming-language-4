@@ -73,6 +73,9 @@ expression:
 	| WHILE expression ';' expression {
 	$$ = new WhileExpression($2,$4);
 }
+	| IF expression ';' expression {
+	$$ = new IfExpression($2,$4);
+}
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
 }

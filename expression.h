@@ -110,6 +110,17 @@ private:
 	Expression *m_block;
 };
 
+class IfExpression : public Expression {
+public:
+	IfExpression(Expression *condition, Expression *block);
+	virtual ~IfExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual Value* codegen();
+private:
+	Expression *m_condition;
+	Expression *m_block;
+};
+
 ostream & operator<<(ostream &os, const Expression &e);
 
 void init();
