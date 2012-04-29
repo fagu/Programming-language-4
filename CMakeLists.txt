@@ -9,6 +9,18 @@ find_package(LLVM)
 include_directories( /usr/include/llvm )
 link_directories( /usr/lib/llvm )
 
-add_executable(prog4 main.cpp)
+include (bison.cmake)
 
-target_link_libraries(prog4 ${LLVM_JIT_LIBS})
+add_flex_files(lexer.flex)
+add_bison_files(parser.y)
+
+set(CPPFILES
+	main.cpp
+	location.cpp
+	bison_parser.cpp
+	flex_lexer.cpp
+)
+
+add_executable(prog4 ${CPPFILES})
+
+target_link_libraries(prog4 ${LLVM_JIT_LIBS} fl)
