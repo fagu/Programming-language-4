@@ -77,6 +77,9 @@ expression:
 	| IF '(' expression ')' '(' expression ')' {
 	$$ = new IfExpression($3,$6);
 }
+	| IF '(' expression ')' '(' expression ')' ELSE '(' expression ')' {
+	$$ = new IfExpression($3,$6,$10);
+}
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
 }

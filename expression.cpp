@@ -155,9 +155,10 @@ Value* WhileExpression::codegen() {
 	return ConstantInt::get(getGlobalContext(), APInt(32,0,true));
 }
 
-IfExpression::IfExpression(Expression* condition, Expression* block) {
+IfExpression::IfExpression(Expression* condition, Expression* block, Expression* elseblock) {
 	m_condition = condition;
 	m_block = block;
+	m_elseblock = elseblock;
 }
 
 IfExpression::~IfExpression() {
@@ -165,17 +166,25 @@ IfExpression::~IfExpression() {
 }
 
 ostream& IfExpression::print(ostream& os) const {
-	return os << "if" << *m_condition << "," << *m_block;
+	os << "if" << *m_condition << "," << *m_block;
+	if (m_elseblock)
+		os << "," << *m_elseblock;
+	return os;
 }
 
 Value* IfExpression::codegen() {
 	BasicBlock *ifblockBB = BasicBlock::Create(getGlobalContext(), "ifblock", theFunction);
+	BasicBlock *elseblockBB = BasicBlock::Create(getGlobalContext(), "elseblock", theFunction);
 	BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(), "afterif", theFunction);
 	Value *v = m_condition->codegen();
 	Value *boo = builder.CreateICmpEQ(v, ConstantInt::get(getGlobalContext(), APInt(32,0,true)));
-	builder.CreateCondBr(boo, afterBB, ifblockBB);
+	builder.CreateCondBr(boo, elseblockBB, ifblockBB);
 	builder.SetInsertPoint(ifblockBB);
 	m_block->codegen();
+	builder.CreateBr(afterBB);
+	builder.SetInsertPoint(elseblockBB);
+	if (m_elseblock)
+		m_elseblock->codegen();
 	builder.CreateBr(afterBB);
 	builder.SetInsertPoint(afterBB);
 	return ConstantInt::get(getGlobalContext(), APInt(32,0,true));

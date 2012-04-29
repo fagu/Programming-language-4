@@ -112,13 +112,14 @@ private:
 
 class IfExpression : public Expression {
 public:
-	IfExpression(Expression *condition, Expression *block);
+	IfExpression(Expression *condition, Expression *block, Expression *elseblock = 0);
 	virtual ~IfExpression();
 	virtual ostream& print(ostream& os) const;
 	virtual Value* codegen();
 private:
 	Expression *m_condition;
 	Expression *m_block;
+	Expression *m_elseblock;
 };
 
 ostream & operator<<(ostream &os, const Expression &e);
