@@ -35,7 +35,7 @@ outerstatements:
 
 outerstatement:
 	  expression ';' {
-	cout << *$1 << endl;
+	handleStatement($1);
 }
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
@@ -44,6 +44,9 @@ outerstatement:
 expression:
 	  NUMBER {
 	$$ = new NumberExpression($1);
+}
+	| IDENTIFIER {
+	$$ = new VariableExpression(*$1);
 }
 	| expression '+' expression {
 	$$ = new BinaryExpression('+',$1,$3);

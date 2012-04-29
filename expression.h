@@ -21,13 +21,27 @@
 #define EXPRESSION_H
 
 #include <ostream>
+#include <map>
+#include <string>
 using namespace std;
+
+#include "llvm/DerivedTypes.h"
+#include "llvm/LLVMContext.h"
+#include "llvm/Module.h"
+#include "llvm/Analysis/Verifier.h"
+#include "llvm/Support/IRBuilder.h"
+using namespace llvm;
+
+static Module *TheModule;
+static IRBuilder<> Builder(getGlobalContext());
+static map<string,Value*> Variables;
 
 class Expression {
 public:
 	Expression();
 	virtual ~Expression();
 	virtual ostream & print(ostream& os) const = 0;
+	virtual Value *codegen() = 0;
 };
 
 class NumberExpression : public Expression {
@@ -35,6 +49,7 @@ public:
 	NumberExpression(int number);
 	virtual ~NumberExpression();
 	virtual ostream & print(ostream &os) const;
+	virtual Value* codegen();
 private:
 	int m_number;
 };
@@ -44,11 +59,26 @@ public:
 	BinaryExpression(char op, Expression *a, Expression *b);
 	virtual ~BinaryExpression();
 	virtual ostream & print(ostream &os) const;
+	virtual Value* codegen();
 private:
 	char m_op;
 	Expression *m_a, *m_b;
 };
 
+class VariableExpression : public Expression {
+public:
+	VariableExpression(const string &name);
+	virtual ~VariableExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual Value* codegen();
+private:
+	string m_name;
+};
+
 ostream & operator<<(ostream &os, const Expression &e);
+
+void init();
+
+void handleStatement(Expression *e);
 
 #endif // EXPRESSION_H

@@ -18,6 +18,9 @@
 
 
 #include "expression.h"
+#include <iostream>
+
+Value *ErrorV(const char *str) { cerr << str << endl; return 0; }
 
 Expression::Expression() {
 
@@ -33,6 +36,10 @@ NumberExpression::NumberExpression(int number) {
 
 NumberExpression::~NumberExpression() {
 
+}
+
+Value* NumberExpression::codegen() {
+	return ConstantInt::get(getGlobalContext(), APInt(32,m_number,true));
 }
 
 ostream& NumberExpression::print(ostream& os) const {
@@ -53,8 +60,49 @@ ostream& BinaryExpression::print(ostream& os) const {
 	return os << *m_a << m_op << *m_b;
 }
 
+Value* BinaryExpression::codegen() {
+	Value *va = m_a->codegen();
+	Value *vb = m_b->codegen();
+	if (va == 0 || vb == 0) return 0;
+	switch (m_op) {
+	case '+': return Builder.CreateAdd(va, vb, "addtmp");
+	case '-': return Builder.CreateSub(va, vb, "subtmp");
+	case '*': return Builder.CreateMul(va, vb, "multmp");
+	case '/': return Builder.CreateSDiv(va, vb, "divtmp");
+	case '%': return Builder.CreateSRem(va, vb, "modtmp");
+	default: return ErrorV("invalid binary operator");
+	}
+}
+
+VariableExpression::VariableExpression(const string& name) {
+	m_name = name;
+}
+
+VariableExpression::~VariableExpression() {
+
+}
+
+ostream& VariableExpression::print(ostream& os) const {
+	return os << m_name;
+}
+
+Value* VariableExpression::codegen() {
+	if (!Variables.count(m_name))
+		return ErrorV("Undefined Variable");
+	return Variables[m_name];
+}
+
 ostream& operator<<(ostream& os, const Expression& e) {
 	os << "(";
 	e.print(os);
 	return os << ")";
+}
+
+void init() {
+	Variables["zwei"] = ConstantInt::get(getGlobalContext(), APInt(32,2,true));
+}
+
+void handleStatement(Expression* e) {
+	cout << *e << endl;
+	e->codegen()->dump();
 }
