@@ -30,6 +30,11 @@ Expression::~Expression() {
 
 }
 
+Expression* Expression::setExpression(Expression* value) {
+	cerr << "You cannot set this!" << endl;
+	return 0;
+}
+
 NumberExpression::NumberExpression(int number) {
 	m_number = number;
 }
@@ -89,7 +94,36 @@ ostream& VariableExpression::print(ostream& os) const {
 Value* VariableExpression::codegen() {
 	if (!Variables.count(m_name))
 		return ErrorV("Undefined Variable");
-	return Variables[m_name];
+	return Builder.CreateLoad(Variables[m_name], m_name.c_str());
+}
+
+Expression* VariableExpression::setExpression(Expression* value) {
+	return new VariableSetExpression(m_name, value);
+}
+
+VariableSetExpression::VariableSetExpression(const string& name, Expression* value) {
+	m_name = name;
+	m_value = value;
+}
+
+VariableSetExpression::~VariableSetExpression() {
+
+}
+
+ostream& VariableSetExpression::print(ostream& os) const {
+	return os << m_name << "=" << *m_value;
+}
+
+Value* VariableSetExpression::codegen() {
+	Value *v = m_value->codegen();
+	if (!v)
+		return 0;
+	if (!Variables.count(m_name)) {
+		AllocaInst *alloca = Builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, m_name.c_str());
+		Variables[m_name] = alloca;
+	}
+	Builder.CreateStore(v, Variables[m_name])->dump();
+	return Builder.CreateLoad(Variables[m_name], m_name.c_str());
 }
 
 ostream& operator<<(ostream& os, const Expression& e) {
@@ -99,7 +133,6 @@ ostream& operator<<(ostream& os, const Expression& e) {
 }
 
 void init() {
-	Variables["zwei"] = ConstantInt::get(getGlobalContext(), APInt(32,2,true));
 }
 
 void handleStatement(Expression* e) {

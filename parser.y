@@ -13,6 +13,7 @@
 %token <num> NUMBER
 %token IF ELSE WHILE FOR
 %type <expression> expression
+%right '='
 %left '+' '-'
 %left '*' '/' '%'
 %left '('
@@ -65,6 +66,9 @@ expression:
 }
 	| '(' expression ')' {
 	$$ = $2;
+}
+	| expression '=' expression {
+	$$ = $1->setExpression($3);
 }
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");

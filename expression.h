@@ -34,7 +34,7 @@ using namespace llvm;
 
 static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
-static map<string,Value*> Variables;
+static map<string,AllocaInst*> Variables;
 
 class Expression {
 public:
@@ -42,6 +42,7 @@ public:
 	virtual ~Expression();
 	virtual ostream & print(ostream& os) const = 0;
 	virtual Value *codegen() = 0;
+	virtual Expression *setExpression(Expression *value);
 };
 
 class NumberExpression : public Expression {
@@ -71,8 +72,20 @@ public:
 	virtual ~VariableExpression();
 	virtual ostream& print(ostream& os) const;
 	virtual Value* codegen();
+	virtual Expression* setExpression(Expression* value);
 private:
 	string m_name;
+};
+
+class VariableSetExpression : public Expression {
+public:
+	VariableSetExpression(const string &name, Expression *value);
+	virtual ~VariableSetExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual Value* codegen();
+private:
+	string m_name;
+	Expression *m_value;
 };
 
 ostream & operator<<(ostream &os, const Expression &e);
