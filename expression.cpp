@@ -153,6 +153,8 @@ void finalize() {
 	fpm->add(new TargetData(*ee->getTargetData()));
 	// Provide basic AliasAnalysis support for GVN.
 	fpm->add(createBasicAliasAnalysisPass());
+	// Promote allocas to registers.
+	fpm->add(createPromoteMemoryToRegisterPass());
 	// Do simple "peephole" optimizations and bit-twiddling optzns.
 	fpm->add(createInstructionCombiningPass());
 	// Reassociate expressions.
@@ -178,8 +180,8 @@ void finalize() {
 	builder.CreateRet(v);
 	verifyFunction(*f);
 	f->dump();
-	
 	fpm->run(*f);
+	f->dump();
 	
 	void *fptr = ee->getPointerToFunction(f);
 	int (*fp)() = (int (*)())(intptr_t)fptr;
