@@ -75,6 +75,7 @@ Value* BinaryExpression::codegen() {
 	case '*': return builder.CreateMul(va, vb, "multmp");
 	case '/': return builder.CreateSDiv(va, vb, "divtmp");
 	case '%': return builder.CreateSRem(va, vb, "modtmp");
+	case ';': return vb;
 	default: return ErrorV("invalid binary operator");
 	}
 }

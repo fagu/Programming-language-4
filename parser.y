@@ -13,6 +13,7 @@
 %token <num> NUMBER
 %token IF ELSE WHILE FOR
 %type <expression> expression
+%left ';'
 %left IF WHILE
 %right '='
 %left '+' '-'
@@ -26,21 +27,9 @@
 
 %%
 
-input: outerstatements {
-}
-
-outerstatements:
-	    {
-}
-	| outerstatements outerstatement {
-}
-
-outerstatement:
-	  expression ';' {
+input:
+	  expression {
 	handleStatement($1);
-}
-	| error {
-	printsyntaxerr(@$, "Syntax error!\n");
 }
 
 expression:
@@ -64,6 +53,9 @@ expression:
 }
 	| expression '%' expression {
 	$$ = new BinaryExpression('%',$1,$3);
+}
+	| expression ';' expression {
+	$$ = new BinaryExpression(';',$1,$3);
 }
 	| '(' expression ')' {
 	$$ = $2;
