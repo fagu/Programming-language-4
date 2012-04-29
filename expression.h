@@ -42,6 +42,7 @@ using namespace llvm;
 static Module *theModule;
 static IRBuilder<> builder(getGlobalContext());
 static map<string,AllocaInst*> variables;
+static Function *theFunction;
 
 class Expression;
 static vector<Expression*> expressions;
@@ -96,6 +97,17 @@ public:
 private:
 	string m_name;
 	Expression *m_value;
+};
+
+class WhileExpression : public Expression {
+public:
+	WhileExpression(Expression *condition, Expression *block);
+	virtual ~WhileExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual Value* codegen();
+private:
+	Expression *m_condition;
+	Expression *m_block;
 };
 
 ostream & operator<<(ostream &os, const Expression &e);

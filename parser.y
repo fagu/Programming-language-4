@@ -70,6 +70,9 @@ expression:
 	| expression '=' expression {
 	$$ = $1->setExpression($3);
 }
+	| WHILE expression ';' expression {
+	$$ = new WhileExpression($2,$4);
+}
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
 }

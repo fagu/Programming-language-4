@@ -126,6 +126,35 @@ Value* VariableSetExpression::codegen() {
 	return builder.CreateLoad(variables[m_name], m_name.c_str());
 }
 
+WhileExpression::WhileExpression(Expression* condition, Expression* block) {
+	m_condition = condition;
+	m_block = block;
+}
+
+WhileExpression::~WhileExpression() {
+
+}
+
+ostream& WhileExpression::print(ostream& os) const {
+	return os << "while" << *m_condition << "," << *m_block;
+}
+
+Value* WhileExpression::codegen() {
+	BasicBlock *cmploopBB = BasicBlock::Create(getGlobalContext(), "cmploop", theFunction);
+	BasicBlock *loopBB = BasicBlock::Create(getGlobalContext(), "loop", theFunction);
+	BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(), "afterloop", theFunction);
+	builder.CreateBr(cmploopBB);
+	builder.SetInsertPoint(cmploopBB);
+	Value *v = m_condition->codegen();
+	Value *boo = builder.CreateICmpEQ(v, ConstantInt::get(getGlobalContext(), APInt(32,0,true)));
+	builder.CreateCondBr(boo, afterBB, loopBB);
+	builder.SetInsertPoint(loopBB);
+	m_block->codegen();
+	builder.CreateBr(cmploopBB);
+	builder.SetInsertPoint(afterBB);
+	return ConstantInt::get(getGlobalContext(), APInt(32,0,true));
+}
+
 ostream& operator<<(ostream& os, const Expression& e) {
 	os << "(";
 	e.print(os);
@@ -167,8 +196,8 @@ void finalize() {
 	fpm->doInitialization();
 	
 	FunctionType *ft = FunctionType::get(Type::getInt32Ty(getGlobalContext()),false);
-	Function *f = Function::Create(ft, Function::ExternalLinkage, "", theModule);
-	BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", f);
+	theFunction = Function::Create(ft, Function::ExternalLinkage, "", theModule);
+	BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", theFunction);
 	builder.SetInsertPoint(bb);
 	Value *v = 0;
 	for (Expression *e : expressions) {
@@ -178,12 +207,12 @@ void finalize() {
 			break;
 	}
 	builder.CreateRet(v);
-	verifyFunction(*f);
-	f->dump();
-	fpm->run(*f);
-	f->dump();
+	verifyFunction(*theFunction);
+	theFunction->dump();
+	fpm->run(*theFunction);
+	theFunction->dump();
 	
-	void *fptr = ee->getPointerToFunction(f);
+	void *fptr = ee->getPointerToFunction(theFunction);
 	int (*fp)() = (int (*)())(intptr_t)fptr;
 	cout << "Ergebnis: " << fp() << endl;
 }
