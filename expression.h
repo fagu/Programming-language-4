@@ -29,12 +29,22 @@ using namespace std;
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Analysis/Passes.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/PassManager.h"
+#include "llvm/Target/TargetData.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/Transforms/Scalar.h"
 using namespace llvm;
 
-static Module *TheModule;
-static IRBuilder<> Builder(getGlobalContext());
-static map<string,AllocaInst*> Variables;
+static Module *theModule;
+static IRBuilder<> builder(getGlobalContext());
+static map<string,AllocaInst*> variables;
+
+class Expression;
+static vector<Expression*> expressions;
 
 class Expression {
 public:
@@ -93,5 +103,7 @@ ostream & operator<<(ostream &os, const Expression &e);
 void init();
 
 void handleStatement(Expression *e);
+
+void finalize();
 
 #endif // EXPRESSION_H

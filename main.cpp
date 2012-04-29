@@ -7,5 +7,6 @@ int yyparse();
 int main(int argc, char **argv) {
 	init();
 	yyparse();
+	finalize();
 	return 0;
 }

@@ -70,11 +70,11 @@ Value* BinaryExpression::codegen() {
 	Value *vb = m_b->codegen();
 	if (va == 0 || vb == 0) return 0;
 	switch (m_op) {
-	case '+': return Builder.CreateAdd(va, vb, "addtmp");
-	case '-': return Builder.CreateSub(va, vb, "subtmp");
-	case '*': return Builder.CreateMul(va, vb, "multmp");
-	case '/': return Builder.CreateSDiv(va, vb, "divtmp");
-	case '%': return Builder.CreateSRem(va, vb, "modtmp");
+	case '+': return builder.CreateAdd(va, vb, "addtmp");
+	case '-': return builder.CreateSub(va, vb, "subtmp");
+	case '*': return builder.CreateMul(va, vb, "multmp");
+	case '/': return builder.CreateSDiv(va, vb, "divtmp");
+	case '%': return builder.CreateSRem(va, vb, "modtmp");
 	default: return ErrorV("invalid binary operator");
 	}
 }
@@ -92,9 +92,9 @@ ostream& VariableExpression::print(ostream& os) const {
 }
 
 Value* VariableExpression::codegen() {
-	if (!Variables.count(m_name))
+	if (!variables.count(m_name))
 		return ErrorV("Undefined Variable");
-	return Builder.CreateLoad(Variables[m_name], m_name.c_str());
+	return builder.CreateLoad(variables[m_name], m_name.c_str());
 }
 
 Expression* VariableExpression::setExpression(Expression* value) {
@@ -118,12 +118,12 @@ Value* VariableSetExpression::codegen() {
 	Value *v = m_value->codegen();
 	if (!v)
 		return 0;
-	if (!Variables.count(m_name)) {
-		AllocaInst *alloca = Builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, m_name.c_str());
-		Variables[m_name] = alloca;
+	if (!variables.count(m_name)) {
+		AllocaInst *alloca = builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, m_name.c_str());
+		variables[m_name] = alloca;
 	}
-	Builder.CreateStore(v, Variables[m_name])->dump();
-	return Builder.CreateLoad(Variables[m_name], m_name.c_str());
+	builder.CreateStore(v, variables[m_name]);
+	return builder.CreateLoad(variables[m_name], m_name.c_str());
 }
 
 ostream& operator<<(ostream& os, const Expression& e) {
@@ -136,6 +136,52 @@ void init() {
 }
 
 void handleStatement(Expression* e) {
-	cout << *e << endl;
-	e->codegen()->dump();
+	expressions.push_back(e);
+}
+
+void finalize() {
+	InitializeNativeTarget();
+	
+	theModule = new Module("my cool jit", getGlobalContext());
+	
+	ExecutionEngine *ee = EngineBuilder(theModule).create();
+	
+	FunctionPassManager *fpm = new FunctionPassManager(theModule);
+
+	// Set up the optimizer pipeline.  Start with registering info about how the
+	// target lays out data structures.
+	fpm->add(new TargetData(*ee->getTargetData()));
+	// Provide basic AliasAnalysis support for GVN.
+	fpm->add(createBasicAliasAnalysisPass());
+	// Do simple "peephole" optimizations and bit-twiddling optzns.
+	fpm->add(createInstructionCombiningPass());
+	// Reassociate expressions.
+	fpm->add(createReassociatePass());
+	// Eliminate Common SubExpressions.
+	fpm->add(createGVNPass());
+	// Simplify the control flow graph (deleting unreachable blocks, etc).
+	fpm->add(createCFGSimplificationPass());
+
+	fpm->doInitialization();
+	
+	FunctionType *ft = FunctionType::get(Type::getInt32Ty(getGlobalContext()),false);
+	Function *f = Function::Create(ft, Function::ExternalLinkage, "", theModule);
+	BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", f);
+	builder.SetInsertPoint(bb);
+	Value *v = 0;
+	for (Expression *e : expressions) {
+		cerr << *e << endl;
+		v = e->codegen();
+		if (!v)
+			break;
+	}
+	builder.CreateRet(v);
+	verifyFunction(*f);
+	f->dump();
+	
+	fpm->run(*f);
+	
+	void *fptr = ee->getPointerToFunction(f);
+	int (*fp)() = (int (*)())(intptr_t)fptr;
+	cout << "Ergebnis: " << fp() << endl;
 }
