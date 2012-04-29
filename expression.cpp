@@ -173,6 +173,8 @@ ostream& IfExpression::print(ostream& os) const {
 }
 
 Value* IfExpression::codegen() {
+	bool ok = true;
+	AllocaInst *result = builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, "ifresult");
 	BasicBlock *ifblockBB = BasicBlock::Create(getGlobalContext(), "ifblock", theFunction);
 	BasicBlock *elseblockBB = BasicBlock::Create(getGlobalContext(), "elseblock", theFunction);
 	BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(), "afterif", theFunction);
@@ -180,14 +182,27 @@ Value* IfExpression::codegen() {
 	Value *boo = builder.CreateICmpEQ(v, ConstantInt::get(getGlobalContext(), APInt(32,0,true)));
 	builder.CreateCondBr(boo, elseblockBB, ifblockBB);
 	builder.SetInsertPoint(ifblockBB);
-	m_block->codegen();
+	Value *vs = m_block->codegen();
+	if (vs)
+		builder.CreateStore(vs, result);
+	else
+		ok = false;
 	builder.CreateBr(afterBB);
 	builder.SetInsertPoint(elseblockBB);
-	if (m_elseblock)
-		m_elseblock->codegen();
+	Value *vse = 0;
+	if (m_elseblock) {
+		vse = m_elseblock->codegen();
+		if (vse)
+			builder.CreateStore(vse, result);
+		else
+			ok = false;
+	} else
+		builder.CreateStore(ConstantInt::get(getGlobalContext(), APInt(32,0,true)), result);
 	builder.CreateBr(afterBB);
 	builder.SetInsertPoint(afterBB);
-	return ConstantInt::get(getGlobalContext(), APInt(32,0,true));
+	if (!ok)
+		return 0;
+	return builder.CreateLoad(result);
 }
 
 ostream& operator<<(ostream& os, const Expression& e) {
