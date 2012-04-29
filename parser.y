@@ -13,6 +13,7 @@
 %token <num> NUMBER
 %token IF ELSE WHILE FOR
 %type <expression> expression
+%left IF WHILE
 %right '='
 %left '+' '-'
 %left '*' '/' '%'
@@ -70,11 +71,11 @@ expression:
 	| expression '=' expression {
 	$$ = $1->setExpression($3);
 }
-	| WHILE expression ';' expression {
-	$$ = new WhileExpression($2,$4);
+	| WHILE '(' expression ')' '(' expression ')' {
+	$$ = new WhileExpression($3,$6);
 }
-	| IF expression ';' expression {
-	$$ = new IfExpression($2,$4);
+	| IF '(' expression ')' '(' expression ')' {
+	$$ = new IfExpression($3,$6);
 }
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
