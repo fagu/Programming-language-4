@@ -1,6 +1,9 @@
 #include <iostream>
+#include "build/bison_parser.h"
+
+int yyparse();
 
 int main(int argc, char **argv) {
-    std::cout << "Hello, world!" << std::endl;
-    return 0;
+	yyparse();
+	return 0;
 }

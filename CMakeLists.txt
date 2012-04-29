@@ -17,6 +17,7 @@ add_bison_files(parser.y)
 set(CPPFILES
 	main.cpp
 	location.cpp
+	expression.cpp
 	bison_parser.cpp
 	flex_lexer.cpp
 )

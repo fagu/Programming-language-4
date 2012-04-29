@@ -1,8 +1,9 @@
 %code requires {
 	#include <math.h>
-	#include <stdio.h>
+	#include <iostream>
 	#include <string>
 	#include "../location.h"
+	#include "../expression.h"
 	#define YYLTYPE Location
 	using namespace std;
 	int yylex (void);
@@ -11,17 +12,14 @@
 %token <name> IDENTIFIER
 %token <num> NUMBER
 %token IF ELSE WHILE FOR
-%left LAND LOR
-%left '!'
-%left EQ LE GE '<' '>' NE
+%type <expression> expression
 %left '+' '-'
 %left '*' '/' '%'
-%left NEG
-%left '.'
-%left '(' '[' '{'
+%left '('
 %union {
 	string *name;
 	int num;
+	Expression *expression;
 }
 
 %%
@@ -36,7 +34,36 @@ outerstatements:
 }
 
 outerstatement:
-	  error {
+	  expression ';' {
+	cout << *$1 << endl;
+}
+	| error {
+	printsyntaxerr(@$, "Syntax error!\n");
+}
+
+expression:
+	  NUMBER {
+	$$ = new NumberExpression($1);
+}
+	| expression '+' expression {
+	$$ = new BinaryExpression('+',$1,$3);
+}
+	| expression '-' expression {
+	$$ = new BinaryExpression('-',$1,$3);
+}
+	| expression '*' expression {
+	$$ = new BinaryExpression('*',$1,$3);
+}
+	| expression '/' expression {
+	$$ = new BinaryExpression('/',$1,$3);
+}
+	| expression '%' expression {
+	$$ = new BinaryExpression('%',$1,$3);
+}
+	| '(' expression ')' {
+	$$ = $2;
+}
+	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
 }
 

@@ -1,6 +1,8 @@
 #ifndef LOCATION_H
 #define LOCATION_H
 
+#include <stdio.h>
+
 struct Location {
 	int first_line;
 	int first_column;
