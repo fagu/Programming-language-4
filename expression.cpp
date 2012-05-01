@@ -24,7 +24,7 @@
 llvm::Value *ErrorV(const char *str) { cerr << str << endl; return 0; }
 
 Expression::Expression() {
-
+	m_type = 0;
 }
 
 Expression::~Expression() {
@@ -36,6 +36,10 @@ Expression* Expression::setExpression(Expression* value) {
 	return 0;
 }
 
+Type* Expression::type() {
+	return m_type;
+}
+
 NumberExpression::NumberExpression(int number) {
 	m_number = number;
 }
@@ -44,12 +48,13 @@ NumberExpression::~NumberExpression() {
 
 }
 
-llvm::Value* NumberExpression::codegen() {
-	return llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,m_number,true));
-}
-
 ostream& NumberExpression::print(ostream& os) const {
 	return os << m_number;
+}
+
+llvm::Value* NumberExpression::codegen() {
+	m_type = new IntegerType;
+	return llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,m_number,true));
 }
 
 BinaryExpression::BinaryExpression(char op, Expression* a, Expression* b) {
@@ -67,8 +72,12 @@ ostream& BinaryExpression::print(ostream& os) const {
 }
 
 llvm::Value* BinaryExpression::codegen() {
+	m_type = new IntegerType;
 	llvm::Value *va = m_a->codegen();
 	llvm::Value *vb = m_b->codegen();
+	if (!(*m_a->type() == IntegerType()) || 
+	    !(*m_b->type() == IntegerType()))
+		return ErrorV("This is not an integer!");
 	if (va == 0 || vb == 0) return 0;
 	switch (m_op) {
 	case '+': return builder.CreateAdd(va, vb, "addtmp");
@@ -96,7 +105,8 @@ ostream& VariableExpression::print(ostream& os) const {
 llvm::Value* VariableExpression::codegen() {
 	if (variables[m_name].empty())
 		return ErrorV("Undefined Variable");
-	return builder.CreateLoad(variables[m_name].back(), m_name.c_str());
+	m_type = variables[m_name].back()->variableType();
+	return builder.CreateLoad(variables[m_name].back()->alloc(), m_name.c_str());
 }
 
 Expression* VariableExpression::setExpression(Expression* value) {
@@ -122,12 +132,16 @@ llvm::Value* VariableSetExpression::codegen() {
 		return 0;
 	if (variables[m_name].empty())
 		return 0;
-	builder.CreateStore(v, variables[m_name].back());
+	VariableDeclarationExpression *var = variables[m_name].back();
+	if (!(*var->variableType() == *m_value->type()))
+		return ErrorV("Types not matching!");
+	m_type = var->variableType();
+	builder.CreateStore(v, var->alloc());
 	return v;
 }
 
-VariableDeclarationExpression::VariableDeclarationExpression(Type* type, const string& name, Expression *block) {
-	m_type = type;
+VariableDeclarationExpression::VariableDeclarationExpression(Type* variabletype, const string& name, Expression* block) {
+	m_variabletype = variabletype;
 	m_name = name;
 	m_block = block;
 }
@@ -137,15 +151,24 @@ VariableDeclarationExpression::~VariableDeclarationExpression() {
 }
 
 ostream& VariableDeclarationExpression::print(ostream& os) const {
-	return os << *m_type << "->" << m_name << " in " << *m_block;
+	return os << *m_variabletype << "->" << m_name << " in " << *m_block;
 }
 
 llvm::Value* VariableDeclarationExpression::codegen() {
-	llvm::AllocaInst *alloca = builder.CreateAlloca(m_type->codegen(), 0, m_name.c_str());
-	variables[m_name].push_back(alloca);
+	m_alloc = builder.CreateAlloca(m_variabletype->codegen(), 0, m_name.c_str());
+	variables[m_name].push_back(this);
 	llvm::Value *returnv = m_block->codegen();
 	variables[m_name].pop_back();
+	m_type = m_block->type();
 	return returnv;
+}
+
+llvm::AllocaInst* VariableDeclarationExpression::alloc() {
+	return m_alloc;
+}
+
+Type* VariableDeclarationExpression::variableType() {
+	return m_variabletype;
 }
 
 WhileExpression::WhileExpression(Expression* condition, Expression* block) {
@@ -174,6 +197,7 @@ llvm::Value* WhileExpression::codegen() {
 	m_block->codegen();
 	builder.CreateBr(cmploopBB);
 	builder.SetInsertPoint(afterBB);
+	m_type = new IntegerType;
 	return llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true));
 }
 
@@ -224,6 +248,10 @@ llvm::Value* IfExpression::codegen() {
 	builder.SetInsertPoint(afterBB);
 	if (!ok)
 		return 0;
+	if (!m_elseblock || !(*m_block->type() == *m_elseblock->type()))
+		m_type = new IntegerType;
+	else
+		m_type = m_block->type();
 	return builder.CreateLoad(result);
 }
 
@@ -241,8 +269,9 @@ ostream& ArrayExpression::print(ostream& os) const {
 }
 
 llvm::Value* ArrayExpression::codegen() {
+	m_type = new ArrayType(m_elementtype);
 	llvm::Type *t = m_elementtype->codegen();
-	llvm::Type *arrayt = llvm::PointerType::get(t,0);
+	llvm::Type *arrayt = m_type->codegen();
 	llvm::Value *sizev = m_size->codegen();
 	llvm::Value *size64v = builder.CreateSExt(sizev, llvm::Type::getInt64Ty(llvm::getGlobalContext()));
 	uint64_t bytesperelement = targetData->getTypeAllocSize(t);
@@ -269,6 +298,10 @@ llvm::Value* ArrayAccessExpression::codegen() {
 	llvm::Value *arrayv = m_array->codegen();
 	llvm::Value *indexv = m_index->codegen();
 	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
+	ArrayType *at = dynamic_cast<ArrayType*>(m_array->type());
+	if (!at)
+		return ErrorV("This is not an array!");
+	m_type = at->elementType();
 	return builder.CreateLoad(pointerv, "arrayelement");
 }
 
@@ -296,6 +329,12 @@ llvm::Value* ArraySetExpression::codegen() {
 	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
 	llvm::Value *valuev = m_value->codegen();
 	builder.CreateStore(valuev, pointerv);
+	ArrayType *at = dynamic_cast<ArrayType*>(m_array->type());
+	if (!at)
+		return ErrorV("This is not an array!");
+	if (!(*at->elementType() == *m_value->type()))
+		return ErrorV("Types not matching!");
+	m_type = at->elementType();
 	return valuev;
 }
 

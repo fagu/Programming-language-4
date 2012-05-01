@@ -40,13 +40,14 @@ using namespace std;
 
 static llvm::Module *theModule;
 static llvm::IRBuilder<> builder(llvm::getGlobalContext());
-static map<string,vector<llvm::AllocaInst*> > variables;
 static llvm::Function *theFunction;
 static llvm::Function* func_malloc;
 static llvm::TargetData *targetData;
 
 class Expression;
 static vector<Expression*> expressions;
+class VariableDeclarationExpression;
+static map<string,vector<VariableDeclarationExpression*> > variables;
 
 class Type;
 
@@ -55,8 +56,11 @@ public:
 	Expression();
 	virtual ~Expression();
 	virtual ostream & print(ostream& os) const = 0;
+	Type *type();
 	virtual llvm::Value *codegen() = 0;
 	virtual Expression *setExpression(Expression *value);
+protected:
+	Type *m_type;
 };
 
 class NumberExpression : public Expression {
@@ -104,14 +108,17 @@ private:
 
 class VariableDeclarationExpression : public Expression {
 public:
-	VariableDeclarationExpression(Type *type, const string &name, Expression *block);
+	VariableDeclarationExpression(Type *variabletype, const string &name, Expression *block);
 	virtual ~VariableDeclarationExpression();
 	virtual ostream& print(ostream& os) const;
 	virtual llvm::Value* codegen();
+	llvm::AllocaInst *alloc();
+	Type *variableType();
 private:
-	Type *m_type;
+	Type *m_variabletype;
 	string m_name;
 	Expression *m_block;
+	llvm::AllocaInst *m_alloc;
 };
 
 class WhileExpression : public Expression {

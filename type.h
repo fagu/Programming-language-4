@@ -50,6 +50,7 @@ public:
 	virtual ostream& print(ostream& os) const;
 	virtual bool operator==(const Type& t) const;
 	virtual llvm::Type* codegen();
+	Type *elementType();
 private:
 	Type *m_elementType;
 };

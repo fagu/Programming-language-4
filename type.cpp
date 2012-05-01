@@ -72,6 +72,10 @@ llvm::Type* ArrayType::codegen() {
 	return llvm::PointerType::get(m_elementType->codegen(),0);
 }
 
+Type* ArrayType::elementType() {
+	return m_elementType;
+}
+
 ostream& operator<<(ostream& os, const Type& t) {
 	os << "(";
 	t.print(os);
