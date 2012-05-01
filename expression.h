@@ -43,6 +43,7 @@ static llvm::IRBuilder<> builder(llvm::getGlobalContext());
 static map<string,llvm::AllocaInst*> variables;
 static llvm::Function *theFunction;
 static llvm::Function* func_malloc;
+static llvm::TargetData *targetData;
 
 class Expression;
 static vector<Expression*> expressions;

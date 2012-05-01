@@ -246,7 +246,9 @@ llvm::Value* ArrayExpression::codegen() {
 	llvm::Type *arrayt = llvm::PointerType::get(t,0);
 	llvm::Value *sizev = m_size->codegen();
 	llvm::Value *size64v = builder.CreateSExt(sizev, llvm::Type::getInt64Ty(llvm::getGlobalContext()));
-	llvm::Value *mallocv = builder.CreateCall(func_malloc, size64v, "malloc");
+	uint64_t bytesperelement = targetData->getTypeAllocSize(t);
+	llvm::Value *bytes64v = builder.CreateMul(size64v, llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm::getGlobalContext()),bytesperelement));
+	llvm::Value *mallocv = builder.CreateCall(func_malloc, bytes64v, "malloc");
 	llvm::Value *pointerv = builder.CreateBitCast(mallocv, arrayt);
 	return pointerv;
 }
@@ -318,11 +320,13 @@ void finalize() {
 	
 	llvm::ExecutionEngine *ee = llvm::EngineBuilder(theModule).create();
 	
+	targetData = new llvm::TargetData(*ee->getTargetData());
+	
 	llvm::FunctionPassManager *fpm = new llvm::FunctionPassManager(theModule);
 
 	// Set up the optimizer pipeline.  Start with registering info about how the
 	// target lays out data structures.
-	fpm->add(new llvm::TargetData(*ee->getTargetData()));
+	fpm->add(targetData);
 	// Provide basic AliasAnalysis support for GVN.
 	fpm->add(llvm::createBasicAliasAnalysisPass());
 	// Promote allocas to registers.
