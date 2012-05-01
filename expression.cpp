@@ -125,7 +125,7 @@ llvm::Value* VariableSetExpression::codegen() {
 		variables[m_name] = alloca;
 	}
 	builder.CreateStore(v, variables[m_name]);
-	return builder.CreateLoad(variables[m_name], m_name.c_str());
+	return v;
 }
 
 VariableDeclarationExpression::VariableDeclarationExpression(Type* type, const string& name, Expression *block) {
