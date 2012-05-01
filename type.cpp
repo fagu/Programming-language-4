@@ -18,6 +18,7 @@
 
 
 #include "type.h"
+#include "expression.h"
 
 #include "llvm/LLVMContext.h"
 
@@ -74,6 +75,41 @@ llvm::Type* ArrayType::codegen() {
 
 Type* ArrayType::elementType() {
 	return m_elementType;
+}
+
+FunctionType::FunctionType(Type* returnType, const vector< Type* >& argTypes) {
+	m_returnType = returnType;
+	m_argTypes = argTypes;
+}
+
+FunctionType::~FunctionType() {
+
+}
+
+ostream& FunctionType::print(ostream& os) const {
+	os << *m_returnType << "(";
+	for (int i = 0; i < (int)m_argTypes.size(); i++) {
+		if (i)
+			os << ",";
+		os << *m_argTypes[i];
+	}
+	return os << ")";
+}
+
+bool FunctionType::operator==(const Type& t) const {
+	const FunctionType *tt = dynamic_cast<const FunctionType*>(&t);
+	if (!tt)
+		return false;
+	return m_returnType == tt->m_returnType && m_argTypes == tt->m_argTypes;
+}
+
+llvm::Type* FunctionType::codegen() {
+	llvm::Type *rt = m_returnType->codegen();
+	vector<llvm::Type*> ats;
+	for (Type *t : m_argTypes)
+		ats.push_back(t->codegen());
+	llvm::FunctionType* ft = llvm::FunctionType::get(rt, ats, false);
+	return llvm::PointerType::get(ft, 0);
 }
 
 ostream& operator<<(ostream& os, const Type& t) {

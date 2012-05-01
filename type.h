@@ -22,6 +22,7 @@
 
 #include "llvm/DerivedTypes.h"
 
+#include <vector>
 #include <ostream>
 using namespace std;
 
@@ -53,6 +54,18 @@ public:
 	Type *elementType();
 private:
 	Type *m_elementType;
+};
+
+class FunctionType : public Type {
+public:
+	FunctionType(Type *returnType, const vector<Type*> &argTypes);
+	virtual ~FunctionType();
+	virtual ostream& print(ostream& os) const;
+	virtual bool operator==(const Type& t) const;
+	virtual llvm::Type* codegen();
+private:
+	Type *m_returnType;
+	vector<Type*> m_argTypes;
 };
 
 ostream & operator<<(ostream &os, const Type &t);

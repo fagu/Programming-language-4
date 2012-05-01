@@ -15,6 +15,7 @@
 %token IF ELSE WHILE FOR INT NEW
 %type <expression> expression
 %type <type> type
+%type <typelist> typelist netypelist
 %left ';'
 %left IF WHILE
 %right '='
@@ -26,6 +27,7 @@
 	int num;
 	Expression *expression;
 	Type *type;
+	vector<Type*> *typelist;
 }
 
 %%
@@ -95,8 +97,29 @@ type:
 	| type '*' {
 	$$ = new ArrayType($1);
 }
+	| type '(' typelist ')' {
+	$$ = new FunctionType($1,*$3);
+}
 	| '(' type ')' {
 	$$ = $2;
+}
+
+typelist:
+	{
+	$$ = new vector<Type*>;
+}
+	| netypelist {
+	$$ = $1;
+}
+
+netypelist:
+	  type {
+	$$ = new vector<Type*>;
+	$$->push_back($1);
+}
+	| netypelist ',' type {
+	$$ = $1;
+	$$->push_back($3);
 }
 
 %%
