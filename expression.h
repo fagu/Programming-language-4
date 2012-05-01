@@ -37,22 +37,24 @@ using namespace std;
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/Transforms/Scalar.h"
-using namespace llvm;
 
-static Module *theModule;
-static IRBuilder<> builder(getGlobalContext());
-static map<string,AllocaInst*> variables;
-static Function *theFunction;
+static llvm::Module *theModule;
+static llvm::IRBuilder<> builder(llvm::getGlobalContext());
+static map<string,llvm::AllocaInst*> variables;
+static llvm::Function *theFunction;
+static llvm::Function* func_malloc;
 
 class Expression;
 static vector<Expression*> expressions;
+
+class Type;
 
 class Expression {
 public:
 	Expression();
 	virtual ~Expression();
 	virtual ostream & print(ostream& os) const = 0;
-	virtual Value *codegen() = 0;
+	virtual llvm::Value *codegen() = 0;
 	virtual Expression *setExpression(Expression *value);
 };
 
@@ -61,7 +63,7 @@ public:
 	NumberExpression(int number);
 	virtual ~NumberExpression();
 	virtual ostream & print(ostream &os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 private:
 	int m_number;
 };
@@ -71,7 +73,7 @@ public:
 	BinaryExpression(char op, Expression *a, Expression *b);
 	virtual ~BinaryExpression();
 	virtual ostream & print(ostream &os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 private:
 	char m_op;
 	Expression *m_a, *m_b;
@@ -82,7 +84,7 @@ public:
 	VariableExpression(const string &name);
 	virtual ~VariableExpression();
 	virtual ostream& print(ostream& os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 	virtual Expression* setExpression(Expression* value);
 private:
 	string m_name;
@@ -93,10 +95,22 @@ public:
 	VariableSetExpression(const string &name, Expression *value);
 	virtual ~VariableSetExpression();
 	virtual ostream& print(ostream& os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 private:
 	string m_name;
 	Expression *m_value;
+};
+
+class VariableDeclarationExpression : public Expression {
+public:
+	VariableDeclarationExpression(Type *type, const string &name, Expression *block);
+	virtual ~VariableDeclarationExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Type *m_type;
+	string m_name;
+	Expression *m_block;
 };
 
 class WhileExpression : public Expression {
@@ -104,7 +118,7 @@ public:
 	WhileExpression(Expression *condition, Expression *block);
 	virtual ~WhileExpression();
 	virtual ostream& print(ostream& os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 private:
 	Expression *m_condition;
 	Expression *m_block;
@@ -115,11 +129,46 @@ public:
 	IfExpression(Expression *condition, Expression *block, Expression *elseblock = 0);
 	virtual ~IfExpression();
 	virtual ostream& print(ostream& os) const;
-	virtual Value* codegen();
+	virtual llvm::Value* codegen();
 private:
 	Expression *m_condition;
 	Expression *m_block;
 	Expression *m_elseblock;
+};
+
+class ArrayExpression : public Expression {
+public:
+	ArrayExpression(Type *elementtype, Expression *size);
+	virtual ~ArrayExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Type *m_elementtype;
+	Expression *m_size;
+};
+
+class ArrayAccessExpression : public Expression {
+public:
+	ArrayAccessExpression(Expression *array, Expression *index);
+	virtual ~ArrayAccessExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+	virtual Expression* setExpression(Expression* value);
+private:
+	Expression *m_array;
+	Expression *m_index;
+};
+
+class ArraySetExpression : public Expression {
+public:
+	ArraySetExpression(Expression *array, Expression *index, Expression *value);
+	virtual ~ArraySetExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Expression *m_array;
+	Expression *m_index;
+	Expression *m_value;
 };
 
 ostream & operator<<(ostream &os, const Expression &e);

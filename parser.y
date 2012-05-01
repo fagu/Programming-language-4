@@ -4,6 +4,7 @@
 	#include <string>
 	#include "../location.h"
 	#include "../expression.h"
+	#include "../type.h"
 	#define YYLTYPE Location
 	using namespace std;
 	int yylex (void);
@@ -11,18 +12,20 @@
 }
 %token <name> IDENTIFIER
 %token <num> NUMBER
-%token IF ELSE WHILE FOR
+%token IF ELSE WHILE FOR INT NEW
 %type <expression> expression
+%type <type> type
 %left ';'
 %left IF WHILE
 %right '='
 %left '+' '-'
 %left '*' '/' '%'
-%left '('
+%left '(' '['
 %union {
 	string *name;
 	int num;
 	Expression *expression;
+	Type *type;
 }
 
 %%
@@ -72,8 +75,28 @@ expression:
 	| IF '(' expression ')' '(' expression ')' ELSE '(' expression ')' {
 	$$ = new IfExpression($3,$6,$10);
 }
+	| type IDENTIFIER '(' expression ')' {
+	$$ = new VariableDeclarationExpression($1,*$2,$4);
+}
+	| NEW type '[' expression ']' {
+	$$ = new ArrayExpression($2,$4);
+}
+	| expression '[' expression ']' {
+	$$ = new ArrayAccessExpression($1,$3);
+}
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
+}
+
+type:
+	  INT {
+	$$ = new IntegerType();
+}
+	| type '*' {
+	$$ = new ArrayType($1);
+}
+	| '(' type ')' {
+	$$ = $2;
 }
 
 %%

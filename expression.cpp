@@ -18,9 +18,10 @@
 
 
 #include "expression.h"
+#include "type.h"
 #include <iostream>
 
-Value *ErrorV(const char *str) { cerr << str << endl; return 0; }
+llvm::Value *ErrorV(const char *str) { cerr << str << endl; return 0; }
 
 Expression::Expression() {
 
@@ -43,8 +44,8 @@ NumberExpression::~NumberExpression() {
 
 }
 
-Value* NumberExpression::codegen() {
-	return ConstantInt::get(getGlobalContext(), APInt(32,m_number,true));
+llvm::Value* NumberExpression::codegen() {
+	return llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,m_number,true));
 }
 
 ostream& NumberExpression::print(ostream& os) const {
@@ -65,9 +66,9 @@ ostream& BinaryExpression::print(ostream& os) const {
 	return os << *m_a << m_op << *m_b;
 }
 
-Value* BinaryExpression::codegen() {
-	Value *va = m_a->codegen();
-	Value *vb = m_b->codegen();
+llvm::Value* BinaryExpression::codegen() {
+	llvm::Value *va = m_a->codegen();
+	llvm::Value *vb = m_b->codegen();
 	if (va == 0 || vb == 0) return 0;
 	switch (m_op) {
 	case '+': return builder.CreateAdd(va, vb, "addtmp");
@@ -92,7 +93,7 @@ ostream& VariableExpression::print(ostream& os) const {
 	return os << m_name;
 }
 
-Value* VariableExpression::codegen() {
+llvm::Value* VariableExpression::codegen() {
 	if (!variables.count(m_name))
 		return ErrorV("Undefined Variable");
 	return builder.CreateLoad(variables[m_name], m_name.c_str());
@@ -115,16 +116,37 @@ ostream& VariableSetExpression::print(ostream& os) const {
 	return os << m_name << "=" << *m_value;
 }
 
-Value* VariableSetExpression::codegen() {
-	Value *v = m_value->codegen();
+llvm::Value* VariableSetExpression::codegen() {
+	llvm::Value *v = m_value->codegen();
 	if (!v)
 		return 0;
 	if (!variables.count(m_name)) {
-		AllocaInst *alloca = builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, m_name.c_str());
+		llvm::AllocaInst *alloca = builder.CreateAlloca(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, m_name.c_str());
 		variables[m_name] = alloca;
 	}
 	builder.CreateStore(v, variables[m_name]);
 	return builder.CreateLoad(variables[m_name], m_name.c_str());
+}
+
+VariableDeclarationExpression::VariableDeclarationExpression(Type* type, const string& name, Expression *block) {
+	m_type = type;
+	m_name = name;
+	m_block = block;
+}
+
+VariableDeclarationExpression::~VariableDeclarationExpression() {
+
+}
+
+ostream& VariableDeclarationExpression::print(ostream& os) const {
+	return os << *m_type << "->" << m_name;
+}
+
+llvm::Value* VariableDeclarationExpression::codegen() {
+	llvm::AllocaInst *alloca = builder.CreateAlloca(m_type->codegen(), 0, m_name.c_str());
+	variables[m_name] = alloca;
+	llvm::Value *returnv = m_block->codegen();
+	return returnv;
 }
 
 WhileExpression::WhileExpression(Expression* condition, Expression* block) {
@@ -140,20 +162,20 @@ ostream& WhileExpression::print(ostream& os) const {
 	return os << "while" << *m_condition << "," << *m_block;
 }
 
-Value* WhileExpression::codegen() {
-	BasicBlock *cmploopBB = BasicBlock::Create(getGlobalContext(), "cmploop", theFunction);
-	BasicBlock *loopBB = BasicBlock::Create(getGlobalContext(), "loop", theFunction);
-	BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(), "afterloop", theFunction);
+llvm::Value* WhileExpression::codegen() {
+	llvm::BasicBlock *cmploopBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cmploop", theFunction);
+	llvm::BasicBlock *loopBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loop", theFunction);
+	llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "afterloop", theFunction);
 	builder.CreateBr(cmploopBB);
 	builder.SetInsertPoint(cmploopBB);
-	Value *v = m_condition->codegen();
-	Value *boo = builder.CreateICmpEQ(v, ConstantInt::get(getGlobalContext(), APInt(32,0,true)));
+	llvm::Value *v = m_condition->codegen();
+	llvm::Value *boo = builder.CreateICmpEQ(v, llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
 	builder.CreateCondBr(boo, afterBB, loopBB);
 	builder.SetInsertPoint(loopBB);
 	m_block->codegen();
 	builder.CreateBr(cmploopBB);
 	builder.SetInsertPoint(afterBB);
-	return ConstantInt::get(getGlobalContext(), APInt(32,0,true));
+	return llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true));
 }
 
 IfExpression::IfExpression(Expression* condition, Expression* block, Expression* elseblock) {
@@ -173,24 +195,24 @@ ostream& IfExpression::print(ostream& os) const {
 	return os;
 }
 
-Value* IfExpression::codegen() {
+llvm::Value* IfExpression::codegen() {
 	bool ok = true;
-	AllocaInst *result = builder.CreateAlloca(Type::getInt32Ty(getGlobalContext()), 0, "ifresult");
-	BasicBlock *ifblockBB = BasicBlock::Create(getGlobalContext(), "ifblock", theFunction);
-	BasicBlock *elseblockBB = BasicBlock::Create(getGlobalContext(), "elseblock", theFunction);
-	BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(), "afterif", theFunction);
-	Value *v = m_condition->codegen();
-	Value *boo = builder.CreateICmpEQ(v, ConstantInt::get(getGlobalContext(), APInt(32,0,true)));
+	llvm::AllocaInst *result = builder.CreateAlloca(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, "ifresult");
+	llvm::BasicBlock *ifblockBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "ifblock", theFunction);
+	llvm::BasicBlock *elseblockBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "elseblock", theFunction);
+	llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(llvm::getGlobalContext(), "afterif", theFunction);
+	llvm::Value *v = m_condition->codegen();
+	llvm::Value *boo = builder.CreateICmpEQ(v, llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
 	builder.CreateCondBr(boo, elseblockBB, ifblockBB);
 	builder.SetInsertPoint(ifblockBB);
-	Value *vs = m_block->codegen();
+	llvm::Value *vs = m_block->codegen();
 	if (vs)
 		builder.CreateStore(vs, result);
 	else
 		ok = false;
 	builder.CreateBr(afterBB);
 	builder.SetInsertPoint(elseblockBB);
-	Value *vse = 0;
+	llvm::Value *vse = 0;
 	if (m_elseblock) {
 		vse = m_elseblock->codegen();
 		if (vse)
@@ -198,12 +220,82 @@ Value* IfExpression::codegen() {
 		else
 			ok = false;
 	} else
-		builder.CreateStore(ConstantInt::get(getGlobalContext(), APInt(32,0,true)), result);
+		builder.CreateStore(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)), result);
 	builder.CreateBr(afterBB);
 	builder.SetInsertPoint(afterBB);
 	if (!ok)
 		return 0;
 	return builder.CreateLoad(result);
+}
+
+ArrayExpression::ArrayExpression(Type* elementtype, Expression* size) {
+	m_elementtype = elementtype;
+	m_size = size;
+}
+
+ArrayExpression::~ArrayExpression() {
+
+}
+
+ostream& ArrayExpression::print(ostream& os) const {
+	return os << "new" << *m_elementtype << "[" << *m_size << "]";
+}
+
+llvm::Value* ArrayExpression::codegen() {
+	llvm::Type *t = m_elementtype->codegen();
+	llvm::Type *arrayt = llvm::PointerType::get(t,0);
+	llvm::Value *sizev = m_size->codegen();
+	llvm::Value *size64v = builder.CreateSExt(sizev, llvm::Type::getInt64Ty(llvm::getGlobalContext()));
+	llvm::Value *mallocv = builder.CreateCall(func_malloc, size64v, "malloc");
+	llvm::Value *pointerv = builder.CreateBitCast(mallocv, arrayt);
+	return pointerv;
+}
+
+ArrayAccessExpression::ArrayAccessExpression(Expression* array, Expression* index) {
+	m_array = array;
+	m_index = index;
+}
+
+ArrayAccessExpression::~ArrayAccessExpression() {
+
+}
+
+ostream& ArrayAccessExpression::print(ostream& os) const {
+	return os << *m_array << "[" << *m_index << "]";
+}
+
+llvm::Value* ArrayAccessExpression::codegen() {
+	llvm::Value *arrayv = m_array->codegen();
+	llvm::Value *indexv = m_index->codegen();
+	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
+	return builder.CreateLoad(pointerv, "arrayelement");
+}
+
+Expression* ArrayAccessExpression::setExpression(Expression* value) {
+	return new ArraySetExpression(m_array, m_index, value);
+}
+
+ArraySetExpression::ArraySetExpression(Expression* array, Expression* index, Expression* value) {
+	m_array = array;
+	m_index = index;
+	m_value = value;
+}
+
+ArraySetExpression::~ArraySetExpression() {
+
+}
+
+ostream& ArraySetExpression::print(ostream& os) const {
+	return os << *m_array << "[" << *m_index << "]=" << *m_value;
+}
+
+llvm::Value* ArraySetExpression::codegen() {
+	llvm::Value *arrayv = m_array->codegen();
+	llvm::Value *indexv = m_index->codegen();
+	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
+	llvm::Value *valuev = m_value->codegen();
+	builder.CreateStore(valuev, pointerv);
+	return valuev;
 }
 
 ostream& operator<<(ostream& os, const Expression& e) {
@@ -220,37 +312,44 @@ void handleStatement(Expression* e) {
 }
 
 void finalize() {
-	InitializeNativeTarget();
+	llvm::InitializeNativeTarget();
 	
-	theModule = new Module("my cool jit", getGlobalContext());
+	theModule = new llvm::Module("my cool jit", llvm::getGlobalContext());
 	
-	ExecutionEngine *ee = EngineBuilder(theModule).create();
+	llvm::ExecutionEngine *ee = llvm::EngineBuilder(theModule).create();
 	
-	FunctionPassManager *fpm = new FunctionPassManager(theModule);
+	llvm::FunctionPassManager *fpm = new llvm::FunctionPassManager(theModule);
 
 	// Set up the optimizer pipeline.  Start with registering info about how the
 	// target lays out data structures.
-	fpm->add(new TargetData(*ee->getTargetData()));
+	fpm->add(new llvm::TargetData(*ee->getTargetData()));
 	// Provide basic AliasAnalysis support for GVN.
-	fpm->add(createBasicAliasAnalysisPass());
+	fpm->add(llvm::createBasicAliasAnalysisPass());
 	// Promote allocas to registers.
-	fpm->add(createPromoteMemoryToRegisterPass());
+	fpm->add(llvm::createPromoteMemoryToRegisterPass());
 	// Do simple "peephole" optimizations and bit-twiddling optzns.
-	fpm->add(createInstructionCombiningPass());
+	fpm->add(llvm::createInstructionCombiningPass());
 	// Reassociate expressions.
-	fpm->add(createReassociatePass());
+	fpm->add(llvm::createReassociatePass());
 	// Eliminate Common SubExpressions.
-	fpm->add(createGVNPass());
+	fpm->add(llvm::createGVNPass());
 	// Simplify the control flow graph (deleting unreachable blocks, etc).
-	fpm->add(createCFGSimplificationPass());
+	fpm->add(llvm::createCFGSimplificationPass());
 
 	fpm->doInitialization();
 	
-	FunctionType *ft = FunctionType::get(Type::getInt32Ty(getGlobalContext()),false);
-	theFunction = Function::Create(ft, Function::ExternalLinkage, "", theModule);
-	BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", theFunction);
+	llvm::PointerType* voidptrt = llvm::PointerType::get(llvm::IntegerType::get(llvm::getGlobalContext(), 8), 0);
+	vector<llvm::Type*> mallocargs;
+	mallocargs.push_back(llvm::IntegerType::get(theModule->getContext(), 64));
+	llvm::FunctionType* malloctype = llvm::FunctionType::get(voidptrt, mallocargs, false);
+	func_malloc = llvm::Function::Create(malloctype, llvm::GlobalValue::ExternalLinkage, "malloc", theModule);
+	func_malloc->setCallingConv(llvm::CallingConv::C);
+	
+	llvm::FunctionType *ft = llvm::FunctionType::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),false);
+	theFunction = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "", theModule);
+	llvm::BasicBlock *bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", theFunction);
 	builder.SetInsertPoint(bb);
-	Value *v = 0;
+	llvm::Value *v = 0;
 	for (Expression *e : expressions) {
 		cerr << *e << endl;
 		v = e->codegen();
@@ -258,10 +357,10 @@ void finalize() {
 			break;
 	}
 	builder.CreateRet(v);
+	theModule->dump();
 	verifyFunction(*theFunction);
-	theFunction->dump();
 	fpm->run(*theFunction);
-	theFunction->dump();
+	theModule->dump();
 	
 	void *fptr = ee->getPointerToFunction(theFunction);
 	int (*fp)() = (int (*)())(intptr_t)fptr;

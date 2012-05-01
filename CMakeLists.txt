@@ -20,6 +20,7 @@ set(CPPFILES
 	main.cpp
 	location.cpp
 	expression.cpp
+	type.cpp
 	bison_parser.cpp
 	flex_lexer.cpp
 )
