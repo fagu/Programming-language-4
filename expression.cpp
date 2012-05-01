@@ -94,9 +94,9 @@ ostream& VariableExpression::print(ostream& os) const {
 }
 
 llvm::Value* VariableExpression::codegen() {
-	if (!variables.count(m_name))
+	if (variables[m_name].empty())
 		return ErrorV("Undefined Variable");
-	return builder.CreateLoad(variables[m_name], m_name.c_str());
+	return builder.CreateLoad(variables[m_name].back(), m_name.c_str());
 }
 
 Expression* VariableExpression::setExpression(Expression* value) {
@@ -120,11 +120,9 @@ llvm::Value* VariableSetExpression::codegen() {
 	llvm::Value *v = m_value->codegen();
 	if (!v)
 		return 0;
-	if (!variables.count(m_name)) {
-		llvm::AllocaInst *alloca = builder.CreateAlloca(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, m_name.c_str());
-		variables[m_name] = alloca;
-	}
-	builder.CreateStore(v, variables[m_name]);
+	if (variables[m_name].empty())
+		return 0;
+	builder.CreateStore(v, variables[m_name].back());
 	return v;
 }
 
@@ -139,13 +137,14 @@ VariableDeclarationExpression::~VariableDeclarationExpression() {
 }
 
 ostream& VariableDeclarationExpression::print(ostream& os) const {
-	return os << *m_type << "->" << m_name;
+	return os << *m_type << "->" << m_name << " in " << *m_block;
 }
 
 llvm::Value* VariableDeclarationExpression::codegen() {
 	llvm::AllocaInst *alloca = builder.CreateAlloca(m_type->codegen(), 0, m_name.c_str());
-	variables[m_name] = alloca;
+	variables[m_name].push_back(alloca);
 	llvm::Value *returnv = m_block->codegen();
+	variables[m_name].pop_back();
 	return returnv;
 }
 
