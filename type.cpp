@@ -66,7 +66,7 @@ bool ArrayType::operator==(const Type& t) const {
 	const ArrayType *tt = dynamic_cast<const ArrayType*>(&t);
 	if (!tt)
 		return false;
-	return m_elementType == tt->m_elementType;
+	return *m_elementType == *tt->m_elementType;
 }
 
 llvm::Type* ArrayType::codegen() {
@@ -100,16 +100,33 @@ bool FunctionType::operator==(const Type& t) const {
 	const FunctionType *tt = dynamic_cast<const FunctionType*>(&t);
 	if (!tt)
 		return false;
-	return m_returnType == tt->m_returnType && m_argTypes == tt->m_argTypes;
+	if (!(*m_returnType == *tt->m_returnType) || m_argTypes.size() != tt->m_argTypes.size())
+		return false;
+	for (int i = 0; i < (int)m_argTypes.size(); i++)
+		if (!(*m_argTypes[i] == *tt->m_argTypes[i]))
+			return false;
+	return true;
 }
 
-llvm::Type* FunctionType::codegen() {
+llvm::FunctionType* FunctionType::functionType() {
 	llvm::Type *rt = m_returnType->codegen();
 	vector<llvm::Type*> ats;
 	for (Type *t : m_argTypes)
 		ats.push_back(t->codegen());
 	llvm::FunctionType* ft = llvm::FunctionType::get(rt, ats, false);
-	return llvm::PointerType::get(ft, 0);
+	return ft;
+}
+
+llvm::Type* FunctionType::codegen() {
+	return llvm::PointerType::get(functionType(), 0);
+}
+
+Type* FunctionType::returnType() {
+	return m_returnType;
+}
+
+std::vector< Type* > FunctionType::argTypes() {
+	return m_argTypes;
 }
 
 ostream& operator<<(ostream& os, const Type& t) {

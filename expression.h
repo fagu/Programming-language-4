@@ -46,8 +46,8 @@ static llvm::TargetData *targetData;
 
 class Expression;
 static vector<Expression*> expressions;
-class VariableDeclarationExpression;
-static map<string,vector<VariableDeclarationExpression*> > variables;
+class Variable;
+static map<string,vector<Variable*> > variables;
 
 class Type;
 
@@ -61,6 +61,18 @@ public:
 	virtual Expression *setExpression(Expression *value);
 protected:
 	Type *m_type;
+};
+
+class Variable {
+public:
+	Variable();
+	Variable(Type *variabletype, llvm::AllocaInst *alloc);
+	~Variable();
+	llvm::AllocaInst *alloc();
+	Type *variableType();
+protected:
+	Type *m_variabletype;
+	llvm::AllocaInst *m_alloc;
 };
 
 class NumberExpression : public Expression {
@@ -106,19 +118,15 @@ private:
 	Expression *m_value;
 };
 
-class VariableDeclarationExpression : public Expression {
+class VariableDeclarationExpression : public Expression, public Variable {
 public:
 	VariableDeclarationExpression(Type *variabletype, const string &name, Expression *block);
 	virtual ~VariableDeclarationExpression();
 	virtual ostream& print(ostream& os) const;
 	virtual llvm::Value* codegen();
-	llvm::AllocaInst *alloc();
-	Type *variableType();
 private:
-	Type *m_variabletype;
 	string m_name;
 	Expression *m_block;
-	llvm::AllocaInst *m_alloc;
 };
 
 class WhileExpression : public Expression {
@@ -177,6 +185,39 @@ private:
 	Expression *m_array;
 	Expression *m_index;
 	Expression *m_value;
+};
+
+class Argument {
+public:
+	Argument(Type *type, const string &name);
+	~Argument();
+private:
+	Type *m_type;
+	string m_name;
+	friend class FunctionExpression;
+};
+
+class FunctionExpression : public Expression {
+public:
+	FunctionExpression(Type *returntype, const vector<Argument*> &arguments, Expression *block);
+	virtual ~FunctionExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Type *m_returntype;
+	vector<Argument*> m_arguments;
+	Expression *m_block;
+};
+
+class CallExpression : public Expression {
+public:
+	CallExpression(Expression *function, const vector<Expression*> &arguments);
+	virtual ~CallExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Expression *m_function;
+	vector<Expression*> m_arguments;
 };
 
 ostream & operator<<(ostream &os, const Expression &e);

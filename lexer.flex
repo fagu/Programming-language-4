@@ -24,6 +24,7 @@ ID       [a-zA-Z_][a-zA-Z0-9_]*
 "for" {return FOR;}
 "int" {return INT;}
 "new" {return NEW;}
+"def" {return DEF;}
 
 {DIGIT}+ {
 	yylval.num = atoi(yytext);

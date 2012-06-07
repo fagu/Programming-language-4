@@ -12,12 +12,14 @@
 }
 %token <name> IDENTIFIER
 %token <num> NUMBER
-%token IF ELSE WHILE FOR INT NEW
+%token IF ELSE WHILE FOR INT NEW DEF
 %type <expression> expression
 %type <type> type
 %type <typelist> typelist netypelist
+%type <arglist> arglist nearglist
+%type <explist> explist neexplist
 %left ';'
-%left IF WHILE
+%left IF WHILE DEF
 %right '='
 %left '+' '-'
 %left '*' '/' '%'
@@ -28,6 +30,8 @@
 	Expression *expression;
 	Type *type;
 	vector<Type*> *typelist;
+	vector<Argument*> *arglist;
+	vector<Expression*> *explist;
 }
 
 %%
@@ -86,6 +90,12 @@ expression:
 	| expression '[' expression ']' {
 	$$ = new ArrayAccessExpression($1,$3);
 }
+	| DEF type ':' '(' arglist ')' '(' expression ')' {
+	$$ = new FunctionExpression($2,*$5,$8);
+}
+	| expression '(' explist ')' {
+	$$ = new CallExpression($1,*$3);
+}
 	| error {
 	printsyntaxerr(@$, "Syntax error!\n");
 }
@@ -118,6 +128,43 @@ netypelist:
 	$$->push_back($1);
 }
 	| netypelist ',' type {
+	$$ = $1;
+	$$->push_back($3);
+}
+
+arglist:
+	{
+	$$ = new vector<Argument*>;
+}
+	| nearglist {
+	$$ = $1;
+}
+
+
+nearglist:
+	  type IDENTIFIER {
+	$$ = new vector<Argument*>;
+	$$->push_back(new Argument($1,*$2));
+}
+	| nearglist ',' type IDENTIFIER {
+	$$ = $1;
+	$$->push_back(new Argument($3,*$4));
+}
+
+explist:
+	{
+	$$ = new vector<Expression*>;
+}
+	| neexplist {
+	$$ = $1;
+}
+
+neexplist:
+	  expression {
+	$$ = new vector<Expression*>;
+	$$->push_back($1);
+}
+	| neexplist ',' expression {
 	$$ = $1;
 	$$->push_back($3);
 }

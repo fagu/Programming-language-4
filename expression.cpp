@@ -40,6 +40,27 @@ Type* Expression::type() {
 	return m_type;
 }
 
+Variable::Variable() {
+
+}
+
+Variable::Variable(Type* variabletype, llvm::AllocaInst* alloc) {
+	m_variabletype = variabletype;
+	m_alloc = alloc;
+}
+
+Variable::~Variable() {
+
+}
+
+llvm::AllocaInst* Variable::alloc() {
+	return m_alloc;
+}
+
+Type* Variable::variableType() {
+	return m_variabletype;
+}
+
 NumberExpression::NumberExpression(int number) {
 	m_number = number;
 }
@@ -75,17 +96,20 @@ llvm::Value* BinaryExpression::codegen() {
 	m_type = new IntegerType;
 	llvm::Value *va = m_a->codegen();
 	llvm::Value *vb = m_b->codegen();
+	if (va == 0 || vb == 0) return 0;
+	if (m_op == ';') {
+		m_type = m_b->type();
+		return vb;
+	}
 	if (!(*m_a->type() == IntegerType()) || 
 	    !(*m_b->type() == IntegerType()))
 		return ErrorV("This is not an integer!");
-	if (va == 0 || vb == 0) return 0;
 	switch (m_op) {
 	case '+': return builder.CreateAdd(va, vb, "addtmp");
 	case '-': return builder.CreateSub(va, vb, "subtmp");
 	case '*': return builder.CreateMul(va, vb, "multmp");
 	case '/': return builder.CreateSDiv(va, vb, "divtmp");
 	case '%': return builder.CreateSRem(va, vb, "modtmp");
-	case ';': return vb;
 	default: return ErrorV("invalid binary operator");
 	}
 }
@@ -132,7 +156,7 @@ llvm::Value* VariableSetExpression::codegen() {
 		return 0;
 	if (variables[m_name].empty())
 		return 0;
-	VariableDeclarationExpression *var = variables[m_name].back();
+	Variable *var = variables[m_name].back();
 	if (!(*var->variableType() == *m_value->type()))
 		return ErrorV("Types not matching!");
 	m_type = var->variableType();
@@ -161,14 +185,6 @@ llvm::Value* VariableDeclarationExpression::codegen() {
 	variables[m_name].pop_back();
 	m_type = m_block->type();
 	return returnv;
-}
-
-llvm::AllocaInst* VariableDeclarationExpression::alloc() {
-	return m_alloc;
-}
-
-Type* VariableDeclarationExpression::variableType() {
-	return m_variabletype;
 }
 
 WhileExpression::WhileExpression(Expression* condition, Expression* block) {
@@ -336,6 +352,106 @@ llvm::Value* ArraySetExpression::codegen() {
 		return ErrorV("Types not matching!");
 	m_type = at->elementType();
 	return valuev;
+}
+
+Argument::Argument(Type* type, const string& name) {
+	m_type = type;
+	m_name = name;
+}
+
+Argument::~Argument() {
+
+}
+
+FunctionExpression::FunctionExpression(Type* returntype, const std::vector< Argument* >& arguments, Expression* block) {
+	m_returntype = returntype;
+	m_arguments = arguments;
+	m_block = block;
+}
+
+FunctionExpression::~FunctionExpression() {
+
+}
+
+ostream& FunctionExpression::print(ostream& os) const {
+	os << *m_returntype << ":" << "(";
+	for (int i = 0; i < (int)m_arguments.size(); i++) {
+		if (i)
+			os << ",";
+		os << *m_arguments[i]->m_type << m_arguments[i]->m_name;
+	}
+	return os << ")" << "(" << *m_block << ")";
+}
+
+llvm::Value* FunctionExpression::codegen() {
+	vector<Type*> argTypes;
+	for (Argument *a : m_arguments)
+		argTypes.push_back(a->m_type);
+	FunctionType *ft = new FunctionType(m_returntype, argTypes);
+	m_type = ft;
+	llvm::FunctionType *ftv = ft->functionType();
+	llvm::BasicBlock *blockbef = builder.GetInsertBlock();
+	llvm::BasicBlock::iterator insertpoint = builder.GetInsertPoint();
+	llvm::Function *f = llvm::Function::Create(ftv, llvm::Function::ExternalLinkage, "inline", theModule);
+	unsigned Idx = 0;
+	for (llvm::Function::arg_iterator AI = f->arg_begin(); Idx != m_arguments.size(); ++AI, ++Idx) {
+		AI->setName(m_arguments[Idx]->m_name);
+	}
+	llvm::BasicBlock *bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", f);
+	builder.SetInsertPoint(bb);
+	llvm::Function::arg_iterator AI = f->arg_begin();
+	for (Argument *a : m_arguments) {
+		llvm::AllocaInst *alloc = builder.CreateAlloca(a->m_type->codegen(), 0, a->m_name.c_str());
+		builder.CreateStore(AI, alloc);
+		Variable *v = new Variable(a->m_type, alloc);
+		variables[a->m_name].push_back(v);
+		AI++;
+	}
+	llvm::Value *v = m_block->codegen();
+	builder.CreateRet(v);
+	for (Argument *a : m_arguments) {
+		variables[a->m_name].pop_back();
+	}
+	builder.SetInsertPoint(blockbef, insertpoint);
+	return f;
+}
+
+CallExpression::CallExpression(Expression* function, const std::vector< Expression* >& arguments) {
+	m_function = function;
+	m_arguments = arguments;
+}
+
+CallExpression::~CallExpression() {
+
+}
+
+ostream& CallExpression::print(ostream& os) const {
+	os << *m_function << "(";
+	for (int i = 0; i < (int)m_arguments.size(); i++) {
+		if (i)
+			os << ",";
+		os << *m_arguments[i];
+	}
+	return os << ")";
+}
+
+llvm::Value* CallExpression::codegen() {
+	llvm::Value *fv = m_function->codegen();
+	FunctionType *ft = dynamic_cast<FunctionType*>(m_function->type());
+	if (!ft)
+		return ErrorV("This is not a function!");
+	m_type = ft->returnType();
+	vector<llvm::Value*> avs;
+	for (Expression *e : m_arguments)
+		avs.push_back(e->codegen());
+	vector<Type*> ats = ft->argTypes();
+	if (m_arguments.size() != ats.size())
+		return ErrorV("Wrong number of arguments!");
+	for (int i = 0; i < (int)m_arguments.size(); i++) {
+		if (!(*m_arguments[i]->type() == *ats[i]))
+			return ErrorV("Wrong argument type!");
+	}
+	return builder.CreateCall(fv, avs, "returnvalue");
 }
 
 ostream& operator<<(ostream& os, const Expression& e) {
