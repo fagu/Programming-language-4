@@ -127,10 +127,10 @@ ostream& VariableExpression::print(ostream& os) const {
 }
 
 llvm::Value* VariableExpression::codegen() {
-	if (variables[m_name].empty())
+	if (variables.top()[m_name].empty())
 		return ErrorV("Undefined Variable");
-	m_type = variables[m_name].back()->variableType();
-	return builder.CreateLoad(variables[m_name].back()->alloc(), m_name.c_str());
+	m_type = variables.top()[m_name].back()->variableType();
+	return builder.CreateLoad(variables.top()[m_name].back()->alloc(), m_name.c_str());
 }
 
 Expression* VariableExpression::setExpression(Expression* value) {
@@ -154,9 +154,9 @@ llvm::Value* VariableSetExpression::codegen() {
 	llvm::Value *v = m_value->codegen();
 	if (!v)
 		return 0;
-	if (variables[m_name].empty())
+	if (variables.top()[m_name].empty())
 		return 0;
-	Variable *var = variables[m_name].back();
+	Variable *var = variables.top()[m_name].back();
 	if (!(*var->variableType() == *m_value->type()))
 		return ErrorV("Types not matching!");
 	m_type = var->variableType();
@@ -180,9 +180,9 @@ ostream& VariableDeclarationExpression::print(ostream& os) const {
 
 llvm::Value* VariableDeclarationExpression::codegen() {
 	m_alloc = builder.CreateAlloca(m_variabletype->codegen(), 0, m_name.c_str());
-	variables[m_name].push_back(this);
+	variables.top()[m_name].push_back(this);
 	llvm::Value *returnv = m_block->codegen();
-	variables[m_name].pop_back();
+	variables.top()[m_name].pop_back();
 	m_type = m_block->type();
 	return returnv;
 }
@@ -395,6 +395,7 @@ llvm::Value* FunctionExpression::codegen() {
 	llvm::Function *oldFunction = theFunction;
 	llvm::Function *f = llvm::Function::Create(ftv, llvm::Function::ExternalLinkage, "inline", theModule);
 	theFunction = f;
+	variables.push(map<string,vector<Variable*> >());
 	unsigned Idx = 0;
 	for (llvm::Function::arg_iterator AI = f->arg_begin(); Idx != m_arguments.size(); ++AI, ++Idx) {
 		AI->setName(m_arguments[Idx]->m_name);
@@ -406,16 +407,14 @@ llvm::Value* FunctionExpression::codegen() {
 		llvm::AllocaInst *alloc = builder.CreateAlloca(a->m_type->codegen(), 0, a->m_name.c_str());
 		builder.CreateStore(AI, alloc);
 		Variable *v = new Variable(a->m_type, alloc);
-		variables[a->m_name].push_back(v);
+		variables.top()[a->m_name].push_back(v);
 		AI++;
 	}
 	llvm::Value *v = m_block->codegen();
 	builder.CreateRet(v);
-	for (Argument *a : m_arguments) {
-		variables[a->m_name].pop_back();
-	}
 	builder.SetInsertPoint(blockbef, insertpoint);
 	theFunction = oldFunction;
+	variables.pop();
 	return f;
 }
 
@@ -510,6 +509,7 @@ void finalize() {
 	theFunction = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "", theModule);
 	llvm::BasicBlock *bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", theFunction);
 	builder.SetInsertPoint(bb);
+	variables.push(map<string,vector<Variable*> >());
 	llvm::Value *v = 0;
 	for (Expression *e : expressions) {
 		cerr << *e << endl;

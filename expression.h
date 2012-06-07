@@ -23,6 +23,7 @@
 #include <ostream>
 #include <map>
 #include <string>
+#include <stack>
 using namespace std;
 
 #include "llvm/DerivedTypes.h"
@@ -47,7 +48,7 @@ static llvm::TargetData *targetData;
 class Expression;
 static vector<Expression*> expressions;
 class Variable;
-static map<string,vector<Variable*> > variables;
+static stack<map<string,vector<Variable*> > > variables;
 
 class Type;
 
