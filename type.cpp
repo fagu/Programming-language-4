@@ -111,14 +111,22 @@ bool FunctionType::operator==(const Type& t) const {
 llvm::FunctionType* FunctionType::functionType() {
 	llvm::Type *rt = m_returnType->codegen();
 	vector<llvm::Type*> ats;
+	ats.push_back(llvm::IntegerType::get(llvm::getGlobalContext(), 64));
 	for (Type *t : m_argTypes)
 		ats.push_back(t->codegen());
 	llvm::FunctionType* ft = llvm::FunctionType::get(rt, ats, false);
 	return ft;
 }
 
+llvm::StructType* FunctionType::structType() {
+	vector<llvm::Type*> ets;
+	ets.push_back(llvm::IntegerType::get(llvm::getGlobalContext(), 64));
+	ets.push_back(llvm::PointerType::get(functionType(), 0));
+	return llvm::StructType::get(llvm::getGlobalContext(), ets);
+}
+
 llvm::Type* FunctionType::codegen() {
-	return llvm::PointerType::get(functionType(), 0);
+	return llvm::PointerType::get(structType(), 0);
 }
 
 Type* FunctionType::returnType() {

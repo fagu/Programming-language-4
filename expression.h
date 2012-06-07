@@ -67,13 +67,13 @@ protected:
 class Variable {
 public:
 	Variable();
-	Variable(Type *variabletype, llvm::AllocaInst *alloc);
+	Variable(Type *variabletype, llvm::Value *alloc);
 	~Variable();
-	llvm::AllocaInst *alloc();
+	llvm::Value *alloc();
 	Type *variableType();
 protected:
 	Type *m_variabletype;
-	llvm::AllocaInst *m_alloc;
+	llvm::Value *m_alloc;
 };
 
 class NumberExpression : public Expression {
@@ -104,7 +104,7 @@ public:
 	virtual ostream& print(ostream& os) const;
 	virtual llvm::Value* codegen();
 	virtual Expression* setExpression(Expression* value);
-private:
+protected:
 	string m_name;
 };
 
@@ -198,15 +198,25 @@ private:
 	friend class FunctionExpression;
 };
 
+class ClosureVariable : public VariableExpression {
+public:
+	ClosureVariable(const string &name, bool reference);
+	~ClosureVariable();
+	string name();
+private:
+	bool m_reference;
+};
+
 class FunctionExpression : public Expression {
 public:
-	FunctionExpression(Type *returntype, const vector<Argument*> &arguments, Expression *block);
+	FunctionExpression(Type* returntype, const vector<Argument*> &arguments, const vector<ClosureVariable*> &closurelist, Expression* block);
 	virtual ~FunctionExpression();
 	virtual ostream& print(ostream& os) const;
 	virtual llvm::Value* codegen();
 private:
 	Type *m_returntype;
 	vector<Argument*> m_arguments;
+	vector<ClosureVariable*> m_closurelist;
 	Expression *m_block;
 };
 

@@ -44,7 +44,7 @@ Variable::Variable() {
 
 }
 
-Variable::Variable(Type* variabletype, llvm::AllocaInst* alloc) {
+Variable::Variable(Type* variabletype, llvm::Value* alloc) {
 	m_variabletype = variabletype;
 	m_alloc = alloc;
 }
@@ -53,7 +53,7 @@ Variable::~Variable() {
 
 }
 
-llvm::AllocaInst* Variable::alloc() {
+llvm::Value* Variable::alloc() {
 	return m_alloc;
 }
 
@@ -363,9 +363,22 @@ Argument::~Argument() {
 
 }
 
-FunctionExpression::FunctionExpression(Type* returntype, const std::vector< Argument* >& arguments, Expression* block) {
+ClosureVariable::ClosureVariable(const string& name, bool reference) : VariableExpression(name) {
+	m_reference = reference;
+}
+
+ClosureVariable::~ClosureVariable() {
+
+}
+
+string ClosureVariable::name() {
+	return m_name;
+}
+
+FunctionExpression::FunctionExpression(Type* returntype, const vector<Argument*> &arguments, const vector<ClosureVariable*> &closurelist, Expression* block) {
 	m_returntype = returntype;
 	m_arguments = arguments;
+	m_closurelist = closurelist;
 	m_block = block;
 }
 
@@ -389,20 +402,61 @@ llvm::Value* FunctionExpression::codegen() {
 		argTypes.push_back(a->m_type);
 	FunctionType *ft = new FunctionType(m_returntype, argTypes);
 	m_type = ft;
+	vector<llvm::Value*> closurevalues;
+	vector<llvm::Type*> closuretypes;
+	for (ClosureVariable *a : m_closurelist) {
+		closurevalues.push_back(a->codegen());
+		closuretypes.push_back(a->type()->codegen());
+	}
+	llvm::StructType *closuretype = llvm::StructType::get(llvm::getGlobalContext(), closuretypes);
+	llvm::Value *sv = builder.CreateAlloca(closuretype);
+	int cn = 0;
+	for (llvm::Value *a : closurevalues) {
+		vector<llvm::Value*> ids;
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
+		builder.CreateStore(a, builder.CreateGEP(sv, ids));
+		cn++;
+	}
 	llvm::FunctionType *ftv = ft->functionType();
 	llvm::BasicBlock *blockbef = builder.GetInsertBlock();
 	llvm::BasicBlock::iterator insertpoint = builder.GetInsertPoint();
 	llvm::Function *oldFunction = theFunction;
 	llvm::Function *f = llvm::Function::Create(ftv, llvm::Function::ExternalLinkage, "inline", theModule);
+	llvm::Type *st = ft->structType();
+	llvm::Value *fsv = builder.CreateAlloca(st);
+	vector<llvm::Value*> ids;
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+	builder.CreateStore(builder.CreatePtrToInt(sv, llvm::IntegerType::get(llvm::getGlobalContext(), 64)), builder.CreateGEP(fsv, ids));
+	ids.pop_back();
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,1,true)));
+	builder.CreateStore(f, builder.CreateGEP(fsv, ids));
 	theFunction = f;
 	variables.push(map<string,vector<Variable*> >());
 	unsigned Idx = 0;
-	for (llvm::Function::arg_iterator AI = f->arg_begin(); Idx != m_arguments.size(); ++AI, ++Idx) {
+	llvm::Function::arg_iterator AI = f->arg_begin();
+	AI->setName("closure");
+	AI++;
+	for (; Idx != m_arguments.size(); ++AI, ++Idx) {
 		AI->setName(m_arguments[Idx]->m_name);
 	}
 	llvm::BasicBlock *bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", f);
 	builder.SetInsertPoint(bb);
-	llvm::Function::arg_iterator AI = f->arg_begin();
+	AI = f->arg_begin();
+	llvm::Value *cp = builder.CreateIntToPtr(AI, llvm::PointerType::get(closuretype, 0));
+	cn = 0;
+	for (ClosureVariable *a : m_closurelist) {
+		llvm::AllocaInst *alloc = builder.CreateAlloca(a->type()->codegen(), 0, a->name().c_str());
+		vector<llvm::Value*> idsi;
+		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
+		builder.CreateStore(builder.CreateLoad(builder.CreateGEP(cp, idsi)), alloc);
+		Variable *v = new Variable(a->type(), alloc);
+		variables.top()[a->name()].push_back(v);
+		cn++;
+	}
+	AI++;
 	for (Argument *a : m_arguments) {
 		llvm::AllocaInst *alloc = builder.CreateAlloca(a->m_type->codegen(), 0, a->m_name.c_str());
 		builder.CreateStore(AI, alloc);
@@ -415,7 +469,7 @@ llvm::Value* FunctionExpression::codegen() {
 	builder.SetInsertPoint(blockbef, insertpoint);
 	theFunction = oldFunction;
 	variables.pop();
-	return f;
+	return fsv;
 }
 
 CallExpression::CallExpression(Expression* function, const std::vector< Expression* >& arguments) {
@@ -438,12 +492,22 @@ ostream& CallExpression::print(ostream& os) const {
 }
 
 llvm::Value* CallExpression::codegen() {
-	llvm::Value *fv = m_function->codegen();
+	llvm::Value *fsv = m_function->codegen();
 	FunctionType *ft = dynamic_cast<FunctionType*>(m_function->type());
 	if (!ft)
 		return ErrorV("This is not a function!");
 	m_type = ft->returnType();
+	vector<llvm::Value*> ids;
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+	llvm::Value *cv = builder.CreateGEP(fsv, ids);
+	cv = builder.CreateLoad(cv, "closure");
+	ids.pop_back();
+	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,1,true)));
+	llvm::Value *fv = builder.CreateGEP(fsv, ids);
+	fv = builder.CreateLoad(fv, "functionpointer");
 	vector<llvm::Value*> avs;
+	avs.push_back(cv);
 	for (Expression *e : m_arguments)
 		avs.push_back(e->codegen());
 	vector<Type*> ats = ft->argTypes();

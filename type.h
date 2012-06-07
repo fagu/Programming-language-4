@@ -63,6 +63,7 @@ public:
 	virtual ostream& print(ostream& os) const;
 	virtual bool operator==(const Type& t) const;
 	llvm::FunctionType* functionType();
+	llvm::StructType* structType();
 	virtual llvm::Type* codegen();
 	Type *returnType();
 	vector<Type*> argTypes();

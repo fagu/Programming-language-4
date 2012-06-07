@@ -15,9 +15,11 @@
 %token IF ELSE WHILE FOR INT NEW DEF
 %type <expression> expression
 %type <type> type
+%type <closurevariable> closurevariable
 %type <typelist> typelist netypelist
 %type <arglist> arglist nearglist
 %type <explist> explist neexplist
+%type <closurelist> closurelist neclosurelist
 %left ';'
 %left IF WHILE DEF
 %right '='
@@ -29,9 +31,11 @@
 	int num;
 	Expression *expression;
 	Type *type;
+	ClosureVariable *closurevariable;
 	vector<Type*> *typelist;
 	vector<Argument*> *arglist;
 	vector<Expression*> *explist;
+	vector<ClosureVariable*> *closurelist;
 }
 
 %%
@@ -90,8 +94,8 @@ expression:
 	| expression '[' expression ']' {
 	$$ = new ArrayAccessExpression($1,$3);
 }
-	| DEF type ':' '(' arglist ')' '(' expression ')' {
-	$$ = new FunctionExpression($2,*$5,$8);
+	| DEF type ':' '(' arglist ')' closurelist '(' expression ')' {
+	$$ = new FunctionExpression($2,*$5,*$7,$9);
 }
 	| expression '(' explist ')' {
 	$$ = new CallExpression($1,*$3);
@@ -167,6 +171,32 @@ neexplist:
 	| neexplist ',' expression {
 	$$ = $1;
 	$$->push_back($3);
+}
+
+closurelist:
+	  {
+	$$ = new vector<ClosureVariable*>;
+}
+	| '[' neclosurelist ']' {
+	$$ = $2;
+}
+
+neclosurelist:
+	  closurevariable {
+	$$ = new vector<ClosureVariable*>;
+	$$->push_back($1);
+}
+	| neclosurelist ',' closurevariable {
+	$$ = $1;
+	$$->push_back($3);
+}
+
+closurevariable:
+	  IDENTIFIER {
+	$$ = new ClosureVariable(*$1, false);
+}
+	| IDENTIFIER '&' {
+	$$ = new ClosureVariable(*$1, true);
 }
 
 %%
