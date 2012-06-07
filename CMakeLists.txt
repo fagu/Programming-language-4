@@ -28,3 +28,7 @@ set(CPPFILES
 add_executable(prog4 ${CPPFILES})
 
 target_link_libraries(prog4 ${LLVM_JIT_LIBS} fl pthread ffi dl m)
+
+ENABLE_TESTING()
+
+add_subdirectory(tests)
