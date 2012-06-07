@@ -392,7 +392,9 @@ llvm::Value* FunctionExpression::codegen() {
 	llvm::FunctionType *ftv = ft->functionType();
 	llvm::BasicBlock *blockbef = builder.GetInsertBlock();
 	llvm::BasicBlock::iterator insertpoint = builder.GetInsertPoint();
+	llvm::Function *oldFunction = theFunction;
 	llvm::Function *f = llvm::Function::Create(ftv, llvm::Function::ExternalLinkage, "inline", theModule);
+	theFunction = f;
 	unsigned Idx = 0;
 	for (llvm::Function::arg_iterator AI = f->arg_begin(); Idx != m_arguments.size(); ++AI, ++Idx) {
 		AI->setName(m_arguments[Idx]->m_name);
@@ -413,6 +415,7 @@ llvm::Value* FunctionExpression::codegen() {
 		variables[a->m_name].pop_back();
 	}
 	builder.SetInsertPoint(blockbef, insertpoint);
+	theFunction = oldFunction;
 	return f;
 }
 
