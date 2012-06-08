@@ -203,6 +203,7 @@ public:
 	ClosureVariable(const string &name, bool reference);
 	~ClosureVariable();
 	string name();
+	bool reference();
 	virtual llvm::Value* codegen();
 	llvm::Type* realType();
 	Variable* createVariable(llvm::Value *in);

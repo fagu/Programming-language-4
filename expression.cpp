@@ -375,6 +375,10 @@ string ClosureVariable::name() {
 	return m_name;
 }
 
+bool ClosureVariable::reference() {
+	return m_reference;
+}
+
 llvm::Value* ClosureVariable::codegen() {
 	if (!m_reference) {
 		llvm::Value *v = VariableExpression::codegen();
@@ -420,7 +424,15 @@ ostream& FunctionExpression::print(ostream& os) const {
 			os << ",";
 		os << *m_arguments[i]->m_type << m_arguments[i]->m_name;
 	}
-	return os << ")" << "(" << *m_block << ")";
+	os << ")[";
+	for (int i = 0; i < (int)m_closurelist.size(); i++) {
+		if (i)
+			os << ",";
+		os << m_closurelist[i]->name();
+		if (m_closurelist[i]->reference())
+			os << "&";
+	}
+	return os << "]" << "(" << *m_block << ")";
 }
 
 llvm::Value* FunctionExpression::codegen() {
