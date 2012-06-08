@@ -429,21 +429,28 @@ llvm::Value* FunctionExpression::codegen() {
 		argTypes.push_back(a->m_type);
 	FunctionType *ft = new FunctionType(m_returntype, argTypes);
 	m_type = ft;
-	vector<llvm::Value*> closurevalues;
-	vector<llvm::Type*> closuretypes;
-	for (ClosureVariable *a : m_closurelist) {
-		closurevalues.push_back(a->codegen());
-		closuretypes.push_back(a->realType());
-	}
-	llvm::StructType *closuretype = llvm::StructType::get(llvm::getGlobalContext(), closuretypes);
-	llvm::Value *sv = builder.CreateAlloca(closuretype);
-	int cn = 0;
-	for (llvm::Value *a : closurevalues) {
-		vector<llvm::Value*> ids;
-		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
-		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
-		builder.CreateStore(a, builder.CreateGEP(sv, ids));
-		cn++;
+	llvm::Value *clpv;
+	llvm::StructType *closuretype;
+	if (!m_closurelist.empty()) {
+		vector<llvm::Value*> closurevalues;
+		vector<llvm::Type*> closuretypes;
+		for (ClosureVariable *a : m_closurelist) {
+			closurevalues.push_back(a->codegen());
+			closuretypes.push_back(a->realType());
+		}
+		closuretype = llvm::StructType::get(llvm::getGlobalContext(), closuretypes);
+		llvm::Value *sv = builder.CreateAlloca(closuretype);
+		int cn = 0;
+		for (llvm::Value *a : closurevalues) {
+			vector<llvm::Value*> ids;
+			ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+			ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
+			builder.CreateStore(a, builder.CreateGEP(sv, ids));
+			cn++;
+		}
+		clpv = builder.CreatePtrToInt(sv, llvm::IntegerType::get(llvm::getGlobalContext(), 64));
+	} else {
+		clpv = llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(64,0,true));
 	}
 	llvm::FunctionType *ftv = ft->functionType();
 	llvm::BasicBlock *blockbef = builder.GetInsertBlock();
@@ -455,7 +462,8 @@ llvm::Value* FunctionExpression::codegen() {
 	vector<llvm::Value*> ids;
 	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
 	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
-	builder.CreateStore(builder.CreatePtrToInt(sv, llvm::IntegerType::get(llvm::getGlobalContext(), 64)), builder.CreateGEP(fsv, ids));
+	if (!m_closurelist.empty())
+		builder.CreateStore(clpv, builder.CreateGEP(fsv, ids));
 	ids.pop_back();
 	ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,1,true)));
 	builder.CreateStore(f, builder.CreateGEP(fsv, ids));
@@ -471,15 +479,17 @@ llvm::Value* FunctionExpression::codegen() {
 	llvm::BasicBlock *bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", f);
 	builder.SetInsertPoint(bb);
 	AI = f->arg_begin();
-	llvm::Value *cp = builder.CreateIntToPtr(AI, llvm::PointerType::get(closuretype, 0));
-	cn = 0;
-	for (ClosureVariable *a : m_closurelist) {
-		vector<llvm::Value*> idsi;
-		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
-		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
-		Variable *v = a->createVariable(builder.CreateLoad(builder.CreateGEP(cp, idsi)));
-		variables.top()[a->name()].push_back(v);
-		cn++;
+	if (!m_closurelist.empty()) {
+		llvm::Value *cp = builder.CreateIntToPtr(AI, llvm::PointerType::get(closuretype, 0));
+		int cn = 0;
+		for (ClosureVariable *a : m_closurelist) {
+			vector<llvm::Value*> idsi;
+			idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+			idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
+			Variable *v = a->createVariable(builder.CreateLoad(builder.CreateGEP(cp, idsi)));
+			variables.top()[a->name()].push_back(v);
+			cn++;
+		}
 	}
 	AI++;
 	for (Argument *a : m_arguments) {
