@@ -69,6 +69,10 @@ NumberExpression::~NumberExpression() {
 
 }
 
+int NumberExpression::number() {
+	return m_number;
+}
+
 ostream& NumberExpression::print(ostream& os) const {
 	return os << m_number;
 }
@@ -297,6 +301,26 @@ llvm::Value* ArrayExpression::codegen() {
 	return pointerv;
 }
 
+NewExpression::NewExpression(Type* elementtype) {
+	m_elementtype = elementtype;
+}
+
+NewExpression::~NewExpression() {
+
+}
+
+ostream& NewExpression::print(ostream& os) const {
+	return os << "new" << "(" << *m_elementtype << ")";
+}
+
+llvm::Value* NewExpression::codegen() {
+	m_type = m_elementtype;
+	llvm::Type *it = m_elementtype->codegen();
+	if (!it->isPointerTy())
+		return ErrorV("This is not a pointer type!");
+	return builder.CreateAlloca(it->getContainedType(0));
+}
+
 ArrayAccessExpression::ArrayAccessExpression(Expression* array, Expression* index) {
 	m_array = array;
 	m_index = index;
@@ -312,13 +336,25 @@ ostream& ArrayAccessExpression::print(ostream& os) const {
 
 llvm::Value* ArrayAccessExpression::codegen() {
 	llvm::Value *arrayv = m_array->codegen();
-	llvm::Value *indexv = m_index->codegen();
-	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
-	ArrayType *at = dynamic_cast<ArrayType*>(m_array->type());
-	if (!at)
+	if (ArrayType *at = dynamic_cast<ArrayType*>(m_array->type())) {
+		llvm::Value *indexv = m_index->codegen();
+		llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
+		m_type = at->elementType();
+		return builder.CreateLoad(pointerv, "arrayelement");
+	} else if (StructType *st = dynamic_cast<StructType*>(m_array->type())) {
+		NumberExpression *ne = dynamic_cast<NumberExpression*>(m_index);
+		if (!ne)
+			return ErrorV("Struct index not a constant!");
+		int nr = ne->number();
+		if (nr < 0 || nr >= st->partTypes().size())
+			return ErrorV("Struct index out of bounds!");
+		m_type = st->partTypes()[nr];
+		vector<llvm::Value*> ids;
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,nr,true)));
+		return builder.CreateLoad(builder.CreateGEP(arrayv, ids));
+	} else
 		return ErrorV("This is not an array!");
-	m_type = at->elementType();
-	return builder.CreateLoad(pointerv, "arrayelement");
 }
 
 Expression* ArrayAccessExpression::setExpression(Expression* value) {
@@ -341,16 +377,29 @@ ostream& ArraySetExpression::print(ostream& os) const {
 
 llvm::Value* ArraySetExpression::codegen() {
 	llvm::Value *arrayv = m_array->codegen();
-	llvm::Value *indexv = m_index->codegen();
-	llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
 	llvm::Value *valuev = m_value->codegen();
-	builder.CreateStore(valuev, pointerv);
-	ArrayType *at = dynamic_cast<ArrayType*>(m_array->type());
-	if (!at)
+	if (ArrayType *at = dynamic_cast<ArrayType*>(m_array->type())) {
+		llvm::Value *indexv = m_index->codegen();
+		llvm::Value *pointerv = builder.CreateGEP(arrayv, indexv, "arrayelementpointer");
+		if (!(*at->elementType() == *m_value->type()))
+			return ErrorV("Types not matching!");
+		builder.CreateStore(valuev, pointerv);
+		m_type = at->elementType();
+	} else if (StructType *st = dynamic_cast<StructType*>(m_array->type())) {
+		NumberExpression *ne = dynamic_cast<NumberExpression*>(m_index);
+		if (!ne)
+			return ErrorV("Struct index not a constant!");
+		int nr = ne->number();
+		if (nr < 0 || nr >= st->partTypes().size())
+			return ErrorV("Struct index out of bounds!");
+		if (!(*st->partTypes()[nr] == *m_value->type()))
+			return ErrorV("Types not matching!");
+		vector<llvm::Value*> ids;
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
+		ids.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,nr,true)));
+		builder.CreateStore(valuev, builder.CreateGEP(arrayv, ids));
+	} else
 		return ErrorV("This is not an array!");
-	if (!(*at->elementType() == *m_value->type()))
-		return ErrorV("Types not matching!");
-	m_type = at->elementType();
 	return valuev;
 }
 

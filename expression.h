@@ -80,6 +80,7 @@ class NumberExpression : public Expression {
 public:
 	NumberExpression(int number);
 	virtual ~NumberExpression();
+	int number();
 	virtual ostream & print(ostream &os) const;
 	virtual llvm::Value* codegen();
 private:
@@ -162,6 +163,16 @@ public:
 private:
 	Type *m_elementtype;
 	Expression *m_size;
+};
+
+class NewExpression : public Expression {
+public:
+	NewExpression(Type *elementtype);
+	virtual ~NewExpression();
+	virtual ostream& print(ostream& os) const;
+	virtual llvm::Value* codegen();
+private:
+	Type *m_elementtype;
 };
 
 class ArrayAccessExpression : public Expression {

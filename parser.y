@@ -12,7 +12,7 @@
 }
 %token <name> IDENTIFIER
 %token <num> NUMBER
-%token IF ELSE WHILE FOR INT NEW DEF
+%token IF ELSE WHILE FOR INT NEW DEF SNEW
 %type <expression> expression
 %type <type> type
 %type <closurevariable> closurevariable
@@ -90,6 +90,9 @@ expression:
 }
 	| NEW type '[' expression ']' {
 	$$ = new ArrayExpression($2,$4);
+}
+	| SNEW '(' type ')' {
+	$$ = new NewExpression($3);
 }
 	| expression '[' expression ']' {
 	$$ = new ArrayAccessExpression($1,$3);
