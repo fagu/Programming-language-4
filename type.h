@@ -72,6 +72,18 @@ private:
 	vector<Type*> m_argTypes;
 };
 
+class StructType : public Type {
+public:
+	StructType(const vector<Type*> &partTypes);
+	virtual ~StructType();
+	vector<Type*> partTypes();
+	virtual ostream& print(ostream& os) const;
+	virtual bool operator==(const Type& t) const;
+	virtual llvm::Type* codegen();
+private:
+	vector<Type*> m_partTypes;
+};
+
 ostream & operator<<(ostream &os, const Type &t);
 
 #endif // TYPE_H

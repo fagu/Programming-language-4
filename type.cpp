@@ -137,6 +137,47 @@ std::vector< Type* > FunctionType::argTypes() {
 	return m_argTypes;
 }
 
+StructType::StructType(const std::vector< Type* >& partTypes) {
+	m_partTypes = partTypes;
+}
+
+StructType::~StructType() {
+
+}
+
+std::vector< Type* > StructType::partTypes() {
+	return m_partTypes;
+}
+
+ostream& StructType::print(ostream& os) const {
+	os << "{";
+	for (int i = 0; i < (int)m_partTypes.size(); i++) {
+		if (i)
+			os << ",";
+		os << *m_partTypes[i];
+	}
+	return os << "}";
+}
+
+bool StructType::operator==(const Type& t) const {
+	const StructType *tt = dynamic_cast<const StructType*>(&t);
+	if (!tt)
+		return false;
+	if (tt->m_partTypes.size() != m_partTypes.size())
+		return false;
+	for (int i = 0; i < (int)m_partTypes.size(); i++)
+		if (!(*m_partTypes[i] == *tt->m_partTypes[i]))
+			return false;
+	return true;
+}
+
+llvm::Type* StructType::codegen() {
+	vector<llvm::Type*> ets;
+	for (Type *t : m_partTypes)
+		ets.push_back(t->codegen());
+	return llvm::StructType::get(llvm::getGlobalContext(), ets)->getPointerTo();
+}
+
 ostream& operator<<(ostream& os, const Type& t) {
 	os << "(";
 	t.print(os);

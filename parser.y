@@ -117,6 +117,9 @@ type:
 	| '(' type ')' {
 	$$ = $2;
 }
+	| '{' typelist '}' {
+	$$ = new StructType(*$2);
+}
 
 typelist:
 	{
