@@ -375,6 +375,33 @@ string ClosureVariable::name() {
 	return m_name;
 }
 
+llvm::Value* ClosureVariable::codegen() {
+	if (!m_reference) {
+		llvm::Value *v = VariableExpression::codegen();
+		m_realtype = m_type->codegen();
+		return v;
+	}
+	if (variables.top()[m_name].empty())
+		return ErrorV("Undefined Variable");
+	m_type = variables.top()[m_name].back()->variableType();
+	m_realtype = m_type->codegen()->getPointerTo();
+	return variables.top()[m_name].back()->alloc();
+}
+
+llvm::Type* ClosureVariable::realType() {
+	return m_realtype;
+}
+
+Variable* ClosureVariable::createVariable(llvm::Value* in) {
+	if (!m_reference) {
+		llvm::AllocaInst *alloc = builder.CreateAlloca(m_realtype, 0, m_name.c_str());
+		builder.CreateStore(in, alloc);
+		return new Variable(m_type, alloc);
+	} else {
+		return new Variable(m_type, in);
+	}
+}
+
 FunctionExpression::FunctionExpression(Type* returntype, const vector<Argument*> &arguments, const vector<ClosureVariable*> &closurelist, Expression* block) {
 	m_returntype = returntype;
 	m_arguments = arguments;
@@ -406,7 +433,7 @@ llvm::Value* FunctionExpression::codegen() {
 	vector<llvm::Type*> closuretypes;
 	for (ClosureVariable *a : m_closurelist) {
 		closurevalues.push_back(a->codegen());
-		closuretypes.push_back(a->type()->codegen());
+		closuretypes.push_back(a->realType());
 	}
 	llvm::StructType *closuretype = llvm::StructType::get(llvm::getGlobalContext(), closuretypes);
 	llvm::Value *sv = builder.CreateAlloca(closuretype);
@@ -447,12 +474,10 @@ llvm::Value* FunctionExpression::codegen() {
 	llvm::Value *cp = builder.CreateIntToPtr(AI, llvm::PointerType::get(closuretype, 0));
 	cn = 0;
 	for (ClosureVariable *a : m_closurelist) {
-		llvm::AllocaInst *alloc = builder.CreateAlloca(a->type()->codegen(), 0, a->name().c_str());
 		vector<llvm::Value*> idsi;
 		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,0,true)));
 		idsi.push_back(llvm::ConstantInt::get(llvm::getGlobalContext(), llvm::APInt(32,cn,true)));
-		builder.CreateStore(builder.CreateLoad(builder.CreateGEP(cp, idsi)), alloc);
-		Variable *v = new Variable(a->type(), alloc);
+		Variable *v = a->createVariable(builder.CreateLoad(builder.CreateGEP(cp, idsi)));
 		variables.top()[a->name()].push_back(v);
 		cn++;
 	}

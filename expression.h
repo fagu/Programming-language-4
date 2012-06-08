@@ -203,8 +203,12 @@ public:
 	ClosureVariable(const string &name, bool reference);
 	~ClosureVariable();
 	string name();
+	virtual llvm::Value* codegen();
+	llvm::Type* realType();
+	Variable* createVariable(llvm::Value *in);
 private:
 	bool m_reference;
+	llvm::Type *m_realtype;
 };
 
 class FunctionExpression : public Expression {
